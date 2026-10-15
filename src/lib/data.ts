@@ -1,0 +1,386 @@
+import "server-only";
+import { db } from "./supabase";
+import type { Customer, InventoryRow, Item, Location, StockStatus, Supplier } from "./types";
+
+// The client is untyped, so callers state the row shape they selected.
+function check<T>(res: { data: unknown; error: { message: string } | null }, what: string): T {
+  if (res.error) throw new Error(`Could not load ${what}: ${res.error.message}`);
+  return res.data as T;
+}
+
+export async function getLocations(): Promise<Location[]> {
+  return check(await db().from("locations").select("*").order("location_id"), "locations");
+}
+
+export async function getCategories(): Promise<string[]> {
+  const items = check<{ category: string }[]>(
+    await db().from("items").select("category"),
+    "categories",
+  );
+  return [...new Set(items.map((i) => i.category))].sort();
+}
+
+export function stockStatus(qty: number, reorderPoint: number): StockStatus {
+  if (qty <= 0) return "out";
+  if (qty <= reorderPoint) return "low";
+  return "ok";
+}
+
+// One row per item with stock summed over locations. Stock comes from v_stock:
+// serialized machines are counted as InStock assets, accessories come from inventory.
+export async function getInventory(): Promise<InventoryRow[]> {
+  const client = db();
+  const [items, suppliers, stock, openPos] = await Promise.all([
+    client.from("items").select("*").order("item_id"),
+    client.from("suppliers").select("*"),
+    client.from("v_stock").select("*"),
+    client.from("purchase_orders").select("item_id, quantity").eq("status", "Ordered"),
+  ]);
+
+  const itemRows = check<Item[]>(items, "items");
+  const supplierRows = check<Supplier[]>(suppliers, "suppliers");
+  const stockRows = check<{ item_id: string; location_id: string; stock_qty: number }[]>(
+    stock,
+    "stock",
+  );
+  const poRows = check<{ item_id: string; quantity: number }[]>(openPos, "purchase orders");
+
+  const supplierName = new Map(supplierRows.map((s) => [s.supplier_id, s.supplier_name]));
+  const byItem = new Map<string, Record<string, number>>();
+  for (const s of stockRows) {
+    const rec = byItem.get(s.item_id) ?? {};
+    rec[s.location_id] = (rec[s.location_id] ?? 0) + s.stock_qty;
+    byItem.set(s.item_id, rec);
+  }
+  const onOrder = new Map<string, number>();
+  for (const po of poRows) onOrder.set(po.item_id, (onOrder.get(po.item_id) ?? 0) + po.quantity);
+
+  return itemRows.map((item) => {
+    const stockByLocation = byItem.get(item.item_id) ?? {};
+    const stockQty = Object.values(stockByLocation).reduce((a, b) => a + b, 0);
+    return {
+      ...item,
+      unit_cost_eur: Number(item.unit_cost_eur),
+      sale_price_eur: Number(item.sale_price_eur),
+      supplier_name: supplierName.get(item.supplier_id) ?? item.supplier_id,
+      stock_by_location: stockByLocation,
+      stock_qty: stockQty,
+      on_order_qty: onOrder.get(item.item_id) ?? 0,
+      stock_value_eur: stockQty * Number(item.unit_cost_eur),
+      stock_status: stockStatus(stockQty, item.reorder_point),
+    };
+  });
+}
+
+// The sample data ends before today, so the window is anchored at the latest
+// order date. A 30-day window stays below PostgREST's 1000-row limit.
+export async function getRecentSales(): Promise<{ revenue: number; margin: number; until: string | null }> {
+  const client = db();
+  const latest = check<{ order_date: string }[]>(
+    await client.from("orders").select("order_date").order("order_date", { ascending: false }).limit(1),
+    "latest order",
+  );
+  if (latest.length === 0) return { revenue: 0, margin: 0, until: null };
+  const until = latest[0].order_date;
+  const since = new Date(Date.parse(until) - 29 * 86_400_000).toISOString().slice(0, 10);
+  const rows = check<{ line_total_eur: number; margin_eur: number }[]>(
+    await client
+      .from("v_order_margin")
+      .select("line_total_eur, margin_eur")
+      .gte("order_date", since)
+      .lte("order_date", until),
+    "revenue",
+  );
+  return {
+    revenue: rows.reduce((sum, r) => sum + Number(r.line_total_eur), 0),
+    margin: rows.reduce((sum, r) => sum + Number(r.margin_eur), 0),
+    until,
+  };
+}
+
+export async function getSuppliers(): Promise<Supplier[]> {
+  return check(await db().from("suppliers").select("*").order("supplier_name"), "suppliers");
+}
+
+export async function getInventoryRow(itemId: string): Promise<InventoryRow | null> {
+  return (await getInventory()).find((i) => i.item_id === itemId) ?? null;
+}
+
+export type Asset = {
+  asset_id: string;
+  serial_number: string;
+  location_id: string | null;
+  condition: string;
+  status: string;
+  received_date: string;
+  acquisition_cost_eur: number;
+};
+
+export type ServiceEntry = {
+  service_id: string;
+  asset_id: string;
+  service_date: string;
+  service_type: string;
+  technician: string | null;
+  cost_eur: number | null;
+  outcome: string | null;
+  next_service_due: string | null;
+  serial_number: string;
+};
+
+export type Movement = {
+  movement_date: string;
+  direction: "IN" | "OUT";
+  quantity: number;
+  reference: string;
+  movement_type: string;
+  location_id: string;
+};
+
+export type PurchaseOrder = {
+  purchase_order_id: string;
+  order_date: string;
+  supplier_id: string;
+  item_id: string;
+  location_id: string;
+  quantity: number;
+  unit_cost_eur: number;
+  expected_date: string | null;
+  received_date: string | null;
+  status: "Ordered" | "Received" | "Cancelled";
+};
+
+export async function getItemActivity(itemId: string) {
+  const client = db();
+  const [assets, assetCounts, services, movements, pos] = await Promise.all([
+    client
+      .from("assets")
+      .select("asset_id, serial_number, location_id, condition, status, received_date, acquisition_cost_eur")
+      .eq("item_id", itemId)
+      .in("status", ["InStock", "InService"])
+      .order("received_date", { ascending: false })
+      .limit(100),
+    client.from("assets").select("status").eq("item_id", itemId),
+    client
+      .from("service_history")
+      .select("*, assets!inner(item_id, serial_number)")
+      .eq("assets.item_id", itemId)
+      .order("service_date", { ascending: false })
+      .limit(50),
+    client
+      .from("stock_movements")
+      .select("*")
+      .eq("item_id", itemId)
+      .order("movement_date", { ascending: false })
+      .limit(30),
+    client
+      .from("purchase_orders")
+      .select("*")
+      .eq("item_id", itemId)
+      .order("order_date", { ascending: false })
+      .limit(10),
+  ]);
+
+  const counts: Record<string, number> = {};
+  for (const a of check<{ status: string }[]>(assetCounts, "asset counts")) {
+    counts[a.status] = (counts[a.status] ?? 0) + 1;
+  }
+
+  type ServiceRow = Omit<ServiceEntry, "serial_number"> & { assets: { serial_number: string } };
+  return {
+    assets: check<Asset[]>(assets, "assets"),
+    assetCounts: counts,
+    services: check<ServiceRow[]>(services, "service history").map(({ assets: a, ...s }) => ({
+      ...s,
+      serial_number: a.serial_number,
+    })),
+    movements: check<Movement[]>(movements, "stock movements"),
+    purchaseOrders: check<PurchaseOrder[]>(pos, "purchase orders"),
+  };
+}
+
+export async function suggestNextItemId(): Promise<string> {
+  const rows = check<{ item_id: string }[]>(await db().from("items").select("item_id"), "item IDs");
+  const max = rows.reduce((m, r) => Math.max(m, Number(r.item_id.match(/^MCH-(\d+)$/)?.[1] ?? 0)), 0);
+  return `MCH-${String(max + 1).padStart(3, "0")}`;
+}
+
+export async function getPurchaseOrders(status?: string): Promise<PurchaseOrder[]> {
+  let query = db().from("purchase_orders").select("*").order("order_date", { ascending: false }).order("purchase_order_id", { ascending: false }).limit(200);
+  if (status) query = query.eq("status", status);
+  return check(await query, "purchase orders");
+}
+
+export async function countPurchaseOrders(): Promise<Record<string, number>> {
+  const client = db();
+  const statuses = ["Ordered", "Received", "Cancelled"] as const;
+  const results = await Promise.all(
+    statuses.map((s) => client.from("purchase_orders").select("*", { count: "exact", head: true }).eq("status", s)),
+  );
+  return Object.fromEntries(statuses.map((s, i) => [s, results[i].count ?? 0]));
+}
+
+export type SalesOrder = {
+  order_id: string;
+  order_date: string;
+  customer_id: string;
+  item_id: string;
+  location_id: string;
+  quantity: number;
+  unit_price_eur: number;
+  order_status: "Open" | "Shipped" | "Delivered" | "Cancelled";
+};
+
+export async function getCustomers(): Promise<Customer[]> {
+  return check(await db().from("customers").select("*").order("customer_name"), "customers");
+}
+
+export async function getSalesOrders(status?: string): Promise<SalesOrder[]> {
+  // order_id is ORD-<n>; sorting by date then ID keeps the newest on top.
+  let query = db()
+    .from("orders")
+    .select("*")
+    .order("order_date", { ascending: false })
+    .order("order_id", { ascending: false })
+    .limit(200);
+  if (status) query = query.eq("order_status", status);
+  return check(await query, "sales orders");
+}
+
+export async function countSalesOrders(): Promise<Record<string, number>> {
+  const client = db();
+  const statuses = ["Open", "Shipped", "Delivered", "Cancelled"] as const;
+  const results = await Promise.all(
+    statuses.map((s) => client.from("orders").select("*", { count: "exact", head: true }).eq("order_status", s)),
+  );
+  return Object.fromEntries(statuses.map((s, i) => [s, results[i].count ?? 0]));
+}
+
+export const SERVICE_INTERVAL_DAYS = 180;
+
+export type ServiceDue = {
+  asset_id: string;
+  serial_number: string;
+  item_id: string;
+  model: string;
+  asset_status: string;
+  location_id: string | null;
+  customer_name: string | null;
+  customer_city: string | null;
+  last_service_date: string;
+  last_service_type: string;
+  last_outcome: string | null;
+  next_service_due: string;
+};
+
+type AssetWithSale = {
+  asset_id: string;
+  serial_number: string;
+  item_id: string;
+  status: string;
+  location_id: string | null;
+  items: { model: string };
+  orders: { order_date: string; customers: { customer_name: string; city: string | null } } | null;
+};
+
+const ASSET_WITH_SALE =
+  "asset_id, serial_number, item_id, status, location_id, items(model), orders(order_date, customers(customer_name, city))";
+
+// Every machine's latest service record, which carries its next due date.
+export async function getServiceSchedule(): Promise<ServiceDue[]> {
+  const client = db();
+  const services = check<
+    { asset_id: string; service_date: string; service_type: string; outcome: string | null; next_service_due: string | null }[]
+  >(await client.from("service_history").select("asset_id, service_date, service_type, outcome, next_service_due").order("service_date", { ascending: false }), "service history");
+
+  const latest = new Map<string, (typeof services)[number]>();
+  for (const s of services) if (!latest.has(s.asset_id)) latest.set(s.asset_id, s);
+  if (latest.size === 0) return [];
+
+  const assets = check<AssetWithSale[]>(
+    await client.from("assets").select(ASSET_WITH_SALE).in("asset_id", [...latest.keys()]),
+    "serviced machines",
+  );
+
+  return assets
+    .filter((a) => a.status !== "Scrapped" && latest.get(a.asset_id)?.next_service_due)
+    .map((a) => {
+      const s = latest.get(a.asset_id)!;
+      return {
+        asset_id: a.asset_id,
+        serial_number: a.serial_number,
+        item_id: a.item_id,
+        model: a.items.model,
+        asset_status: a.status,
+        location_id: a.location_id,
+        customer_name: a.orders?.customers.customer_name ?? null,
+        customer_city: a.orders?.customers.city ?? null,
+        last_service_date: s.service_date,
+        last_service_type: s.service_type,
+        last_outcome: s.outcome,
+        next_service_due: s.next_service_due!,
+      };
+    })
+    .sort((x, y) => x.next_service_due.localeCompare(y.next_service_due));
+}
+
+export type NeverServiced = {
+  asset_id: string;
+  serial_number: string;
+  item_id: string;
+  model: string;
+  sold_on: string;
+  customer_name: string;
+  customer_city: string | null;
+};
+
+// Sold machines without any service record, longest-unserviced first.
+export async function getNeverServiced({
+  page,
+  pageSize,
+  q,
+}: {
+  page: number;
+  pageSize: number;
+  q?: string;
+}): Promise<{ rows: NeverServiced[]; total: number; overdueFirstService: number }> {
+  const client = db();
+  const serviced = check<{ asset_id: string }[]>(await client.from("service_history").select("asset_id"), "service history");
+  const servicedIds = [...new Set(serviced.map((s) => s.asset_id))];
+  const excluded = `(${servicedIds.map((id) => `"${id}"`).join(",")})`;
+
+  const base = () => {
+    let query = client
+      .from("assets")
+      .select(ASSET_WITH_SALE.replace("orders(", "orders!inner("), { count: "exact" })
+      .eq("status", "Sold");
+    if (servicedIds.length) query = query.not("asset_id", "in", excluded);
+    if (q) query = query.ilike("serial_number", `%${q}%`);
+    return query;
+  };
+
+  const cutoff = new Date(Date.now() - SERVICE_INTERVAL_DAYS * 86_400_000).toISOString().slice(0, 10);
+  const [pageRes, overdueRes] = await Promise.all([
+    base()
+      .order("orders(order_date)", { ascending: true })
+      .order("asset_id", { ascending: true })
+      .range(page * pageSize, page * pageSize + pageSize - 1),
+    base().lte("orders.order_date", cutoff).range(0, 0),
+  ]);
+  const rows = check<AssetWithSale[]>(pageRes, "unserviced machines");
+  return {
+    rows: rows.map((a) => ({
+      asset_id: a.asset_id,
+      serial_number: a.serial_number,
+      item_id: a.item_id,
+      model: a.items.model,
+      sold_on: a.orders!.order_date,
+      customer_name: a.orders!.customers.customer_name,
+      customer_city: a.orders!.customers.city,
+    })),
+    total: pageRes.count ?? 0,
+    overdueFirstService: overdueRes.count ?? 0,
+  };
+}
+
+export const SERVICE_TYPES = ["Inspection", "Descaling", "Calibration", "Preventive maintenance", "Repair"] as const;
