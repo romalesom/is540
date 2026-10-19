@@ -30,7 +30,7 @@ Prüfen mit `npx tsc --noEmit`, `npm run lint` und `npm run build`. Nach neuen R
 
 ## Funktionsumfang
 **ERP**
-- **Home:** KPI-Kacheln; „Below reorder point“ führt zu `/alerts` (Low-Stock-Alarme mit „Reorder“), „Revenue“ zum Reporting. Linke Spalte unter den Kacheln ist bewusst noch leer (Inhalt offen)
+- **Home:** KPI-Kacheln; „Below reorder point“ führt zu `/alerts` (Low-Stock-Alarme mit „Reorder“), „Revenue“ zum Reporting. Darunter die 5 nächsten eintreffenden Purchase Orders (offen, nach Liefertermin, überfällige markiert), die 5 neuesten Sales Orders (alle Status) und Value by location
 - **Inventory:** Suche, Sortierung, Filter nach Kategorie, Standort und Bestandsstatus
 - **Detail:** Bestand je Standort, Bewegungen, Service-Historie, Geräte
 - **New item / Edit:** ID-Vorschlag, Prüfung auf doppelte IDs und plausible Werte; beim Anlegen mindestens ein Lieferant mit Preis

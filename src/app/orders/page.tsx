@@ -3,7 +3,7 @@ import { cancelPurchaseOrder, receivePurchaseOrder } from "@/app/actions/orders"
 import { ConfirmAction } from "@/components/forms";
 import { Icon } from "@/components/icon";
 import { Notice } from "@/components/notice";
-import { ButtonLink, Card, EmptyState, PageHeader, eur, num } from "@/components/ui";
+import { ButtonLink, Card, EmptyState, ORDER_STATUS_STYLE, PageHeader, eur, num } from "@/components/ui";
 import { countPurchaseOrders, getInventory, getLocations, getPurchaseOrders, getSuppliers } from "@/lib/data";
 import { getRole } from "@/lib/role";
 
@@ -14,11 +14,6 @@ const TABS = [
   { value: "all", label: "All" },
 ] as const;
 
-const STATUS_STYLE: Record<string, string> = {
-  Ordered: "bg-amber-soft text-[#8a5a00]",
-  Received: "bg-ok-soft text-ok",
-  Cancelled: "bg-canvas text-muted ring-1 ring-line",
-};
 
 export default async function OrdersPage({ searchParams }: PageProps<"/orders">) {
   const sp = await searchParams;
@@ -97,7 +92,7 @@ export default async function OrdersPage({ searchParams }: PageProps<"/orders">)
                           <span className="font-mono">{po.purchase_order_id}</span> · {po.order_date}
                         </div>
                       </div>
-                      <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLE[po.status]}`}>
+                      <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${ORDER_STATUS_STYLE[po.status]}`}>
                         {po.status === "Ordered" ? "Open" : po.status}
                       </span>
                     </div>
@@ -183,7 +178,7 @@ export default async function OrdersPage({ searchParams }: PageProps<"/orders">)
                         {po.received_date && <div className="text-xs text-muted">received {po.received_date}</div>}
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLE[po.status]}`}>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${ORDER_STATUS_STYLE[po.status]}`}>
                           {po.status === "Ordered" ? "Open" : po.status}
                         </span>
                       </td>

@@ -3,7 +3,7 @@ import { advanceSalesOrder, cancelSalesOrder } from "@/app/actions/sales";
 import { ConfirmAction } from "@/components/forms";
 import { Icon } from "@/components/icon";
 import { Notice } from "@/components/notice";
-import { ButtonLink, Card, EmptyState, PageHeader, eur, num } from "@/components/ui";
+import { ButtonLink, Card, EmptyState, ORDER_STATUS_STYLE, PageHeader, eur, num } from "@/components/ui";
 import { countSalesOrders, getCustomers, getInventory, getLocations, getSalesOrders } from "@/lib/data";
 import { fmt } from "@/lib/format";
 import { getRole } from "@/lib/role";
@@ -16,12 +16,6 @@ const TABS = [
   { value: "all", label: "All" },
 ] as const;
 
-const STATUS_STYLE: Record<string, string> = {
-  Open: "bg-amber-soft text-[#8a5a00]",
-  Shipped: "bg-[#e8f0fb] text-[#005eb8]",
-  Delivered: "bg-ok-soft text-ok",
-  Cancelled: "bg-canvas text-muted ring-1 ring-line",
-};
 
 const NEXT: Record<string, { label: string; icon: string; text: string } | undefined> = {
   Open: { label: "Ship", icon: "local_shipping", text: "The order is marked as shipped." },
@@ -101,7 +95,7 @@ export default async function SalesPage({ searchParams }: PageProps<"/sales">) {
                           <span className="font-mono">{o.order_id}</span> · {o.order_date}
                         </div>
                       </div>
-                      <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLE[o.order_status]}`}>
+                      <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${ORDER_STATUS_STYLE[o.order_status]}`}>
                         {o.order_status}
                       </span>
                     </div>
@@ -187,7 +181,7 @@ export default async function SalesPage({ searchParams }: PageProps<"/sales">) {
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">{margin != null ? eur(margin) : "–"}</td>
                       <td className="px-4 py-3">
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLE[o.order_status]}`}>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${ORDER_STATUS_STYLE[o.order_status]}`}>
                           {o.order_status}
                         </span>
                       </td>

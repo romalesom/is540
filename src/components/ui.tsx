@@ -96,6 +96,16 @@ export function KpiTile({
   );
 }
 
+// Status pills for purchase orders (Ordered/Received) and sales orders (Open/Shipped/Delivered).
+export const ORDER_STATUS_STYLE: Record<string, string> = {
+  Ordered: "bg-amber-soft text-[#8a5a00]",
+  Open: "bg-amber-soft text-[#8a5a00]",
+  Shipped: "bg-[#e8f0fb] text-[#005eb8]",
+  Received: "bg-ok-soft text-ok",
+  Delivered: "bg-ok-soft text-ok",
+  Cancelled: "bg-canvas text-muted ring-1 ring-line",
+};
+
 const STATUS_STYLE: Record<StockStatus, { label: string; cls: string; icon: string }> = {
   out: { label: "Out of stock", cls: "bg-brand-soft text-brand", icon: "block" },
   low: { label: "Low stock", cls: "bg-amber-soft text-[#8a5a00]", icon: "warning" },

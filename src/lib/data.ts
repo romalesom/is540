@@ -250,6 +250,20 @@ export async function getPurchaseOrders(status?: string): Promise<PurchaseOrder[
   return check(await query, "purchase orders");
 }
 
+// Open purchase orders by expected arrival, overdue ones first.
+export async function getIncomingPurchaseOrders(limit = 5): Promise<PurchaseOrder[]> {
+  return check(
+    await db()
+      .from("purchase_orders")
+      .select("*")
+      .eq("status", "Ordered")
+      .order("expected_date", { ascending: true, nullsFirst: false })
+      .order("purchase_order_id")
+      .limit(limit),
+    "incoming purchase orders",
+  );
+}
+
 export async function countPurchaseOrders(): Promise<Record<string, number>> {
   const client = db();
   const statuses = ["Ordered", "Received", "Cancelled"] as const;
@@ -277,14 +291,14 @@ export async function getCustomers(): Promise<Customer[]> {
   return check(await db().from("customers").select("*").order("customer_name"), "customers");
 }
 
-export async function getSalesOrders(status?: string): Promise<SalesOrder[]> {
+export async function getSalesOrders(status?: string, limit = 200): Promise<SalesOrder[]> {
   // order_id is ORD-<n>; sorting by date then ID keeps the newest on top.
   let query = db()
     .from("sales_orders")
     .select("*")
     .order("order_date", { ascending: false })
     .order("order_id", { ascending: false })
-    .limit(200);
+    .limit(limit);
   if (status) query = query.eq("order_status", status);
   return check(await query, "sales orders");
 }
