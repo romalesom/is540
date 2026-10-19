@@ -28,9 +28,10 @@ const REPORT_NAV = [
   { href: "/reporting/service", label: "After-sales & service", icon: "build" },
 ];
 
-function Logo() {
+// The logo links to the ERP home page, also from inside reporting.
+function Logo({ onClick }: { onClick?: () => void }) {
   return (
-    <div className="flex items-center gap-3">
+    <Link href="/" onClick={onClick} aria-label="MES Inventory – Home" className="-m-1.5 flex items-center gap-3 rounded-control p-1.5 hover:bg-canvas">
       <div className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-brand text-white">
         <Icon name="coffee_maker" />
       </div>
@@ -38,7 +39,7 @@ function Logo() {
         <div className="text-[15px] font-bold leading-tight text-ink">MES Inventory</div>
         <div className="text-xs text-muted">Coffee machines</div>
       </div>
-    </div>
+    </Link>
   );
 }
 
@@ -79,9 +80,9 @@ export function Sidebar({ role }: { role: Role }) {
         >
           <Icon name="menu" className="!text-[24px]" />
         </button>
-        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-brand text-white">
+        <Link href="/" aria-label="Home" className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-brand text-white hover:bg-brand-dark">
           <Icon name="coffee_maker" className="!text-[18px]" />
-        </div>
+        </Link>
         <span className="min-w-0 flex-1 truncate font-bold text-ink">{pathname.startsWith("/reporting/item") ? "Machine analytics" : (current?.label ?? "MES Inventory")}</span>
         <span
           className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
@@ -103,7 +104,7 @@ export function Sidebar({ role }: { role: Role }) {
         }`}
       >
         <div className="flex items-center justify-between px-6 py-5">
-          <Logo />
+          <Logo onClick={() => setOpen(false)} />
           <button
             type="button"
             onClick={() => setOpen(false)}
