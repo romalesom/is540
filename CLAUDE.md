@@ -85,4 +85,5 @@ Kennzahlen und Formeln liegen zentral in [src/lib/reporting.ts](src/lib/reportin
 2. **Rabattregel:** Das Verkaufsformular erlaubt 0, 5 oder 10 % frei, die Daten folgen „5 % bei Maschinen ab 3 Stück“. Noch nicht entschieden, ob angeglichen wird.
 3. **Storno nach Versand** (Shipped → Cancelled) ist nicht vorgesehen. Bei Bedarf mit dem Nutzer klären.
 4. **Atomarität:** Wareneingang und Verkauf schreiben mehrere Tabellen ohne gemeinsame Transaktion. Für den Prototyp akzeptiert; später als DB-Funktion möglich.
-5. **Abgabe-Artefakte** stehen noch aus: Foliensatz (PDF), Video (max. 12 Min.), ZIP.
+5. **Alte Spalte `items.supplier_id` entfernen:** wird von der App nicht mehr benutzt (seit `item_suppliers`), ist aber noch vorhanden und nullable. Im SQL-Editor ausführen: `alter table public.items drop column supplier_id;`
+6. **Abgabe-Artefakte** stehen noch aus: Foliensatz (PDF), Video (max. 12 Min.), ZIP.

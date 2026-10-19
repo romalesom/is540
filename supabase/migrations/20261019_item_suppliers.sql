@@ -21,4 +21,6 @@ select item_id, supplier_id, unit_cost_eur, null from public.items;
 alter table public.items alter column supplier_id drop not null;
 
 -- Step 2 (after the new app version is deployed): drop the old 1:n link.
+-- Pending as of 2026-10-19: run manually in the Supabase SQL editor. The app no
+-- longer reads or writes this column, so it is harmless until then.
 -- alter table public.items drop column supplier_id;
