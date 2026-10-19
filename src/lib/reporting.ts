@@ -14,7 +14,11 @@ import type { Customer, Item, Location, Supplier } from "./types";
  *                    if none are linked (accessories), quantity × item unit cost
  *                    (same rule as the v_order_margin view)
  *   Gross margin     Revenue − COGS;  Margin % = Gross margin / Revenue
- *   List revenue     Σ quantity × current sale_price_eur;  Discount rate = 1 − Revenue / List revenue
+ *   Discount         stored per sales order as a decimal fraction (sales_orders.discount, 0.05 = 5 %);
+ *                    unit_price_eur is the net price after it
+ *   List revenue     Σ Revenue / (1 − discount) — the list price at order time, not today's
+ *   Discount amount  List revenue − Revenue;  Discount rate = Discount amount / List revenue
+ *   Discounted share orders with discount > 0 / all orders
  *   Inventory value  current stock (v_stock) × item unit cost — a snapshot, not period-dependent
  *   Stock turnover   annualised COGS of the period / inventory value
  *   Days of cover    current stock / average units sold per day in the period
@@ -66,6 +70,7 @@ type OrderRow = {
   location_id: string;
   quantity: number;
   unit_price_eur: number;
+  discount: number;
   order_status: string;
 };
 type PoRow = {
@@ -102,6 +107,7 @@ export type SaleLine = {
   customer_id: string;
   quantity: number;
   revenue: number;
+  discount: number;
   listRevenue: number;
   cogs: number;
   margin: number;
@@ -133,6 +139,7 @@ export const loadDataset = cache(async () => {
     .map((o) => {
       const item = itemById.get(o.item_id)!;
       const revenue = o.quantity * Number(o.unit_price_eur);
+      const discount = Number(o.discount);
       const cogs = assetCostByOrder.get(o.order_id) ?? o.quantity * item.unit_cost_eur;
       return {
         order_id: o.order_id,
@@ -145,7 +152,8 @@ export const loadDataset = cache(async () => {
         customer_id: o.customer_id,
         quantity: o.quantity,
         revenue,
-        listRevenue: o.quantity * item.sale_price_eur,
+        discount,
+        listRevenue: revenue / (1 - discount),
         cogs,
         margin: revenue - cogs,
       };
@@ -275,11 +283,21 @@ export function stockOf(ds: Dataset, itemId: string, location?: string) {
 
 // ---------- Aggregation helpers ----------
 
-export type Totals = { revenue: number; cogs: number; margin: number; listRevenue: number; units: number; orders: number };
+export type Totals = {
+  revenue: number;
+  cogs: number;
+  margin: number;
+  listRevenue: number;
+  discountAmount: number;
+  units: number;
+  orders: number;
+  discountedOrders: number;
+};
 
 export function totals(lines: SaleLine[]): Totals {
-  const t = { revenue: 0, cogs: 0, margin: 0, listRevenue: 0, units: 0, orders: 0 };
+  const t = { revenue: 0, cogs: 0, margin: 0, listRevenue: 0, discountAmount: 0, units: 0, orders: 0, discountedOrders: 0 };
   const orderIds = new Set<string>();
+  const discounted = new Set<string>();
   for (const l of lines) {
     t.revenue += l.revenue;
     t.cogs += l.cogs;
@@ -287,8 +305,11 @@ export function totals(lines: SaleLine[]): Totals {
     t.listRevenue += l.listRevenue;
     t.units += l.quantity;
     orderIds.add(l.order_id);
+    if (l.discount > 0) discounted.add(l.order_id);
   }
   t.orders = orderIds.size;
+  t.discountedOrders = discounted.size;
+  t.discountAmount = t.listRevenue - t.revenue;
   return t;
 }
 

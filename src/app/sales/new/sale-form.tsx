@@ -6,7 +6,7 @@ import { createSalesOrder } from "@/app/actions/sales";
 import { Field, FormError, SubmitButton, controlClass } from "@/components/forms";
 import { eur, num } from "@/components/ui";
 import type { Customer, InventoryRow, Location } from "@/lib/types";
-import { DISCOUNTS, LIMITS } from "@/lib/validation";
+import { DISCOUNTS, LIMITS, discountLabel, suggestedDiscount } from "@/lib/validation";
 
 export function SaleForm({
   items,
@@ -29,11 +29,15 @@ export function SaleForm({
     Object.entries(i?.stock_by_location ?? {}).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
   const [locationId, setLocationId] = useState(state.values?.location_id ?? bestLocation(item));
   const [qty, setQty] = useState(state.values?.quantity ?? "1");
-  const [discount, setDiscount] = useState(state.values?.discount ?? "0");
+  const [discount, setDiscount] = useState(state.values?.discount ?? String(suggestedDiscount(item?.tracking_mode, Number(qty))));
+  // Item and quantity changes re-apply the volume-discount rule; a manual pick
+  // after that is kept until the next change.
+  const applyRule = (i: InventoryRow | undefined, q: string) => setDiscount(String(suggestedDiscount(i?.tracking_mode, Number(q))));
+  const suggested = suggestedDiscount(item?.tracking_mode, Number(qty));
 
   const available = item?.stock_by_location[locationId] ?? 0;
   const quantity = Number(qty);
-  const unitPrice = item ? Math.round(item.sale_price_eur * (1 - Number(discount) / 100) * 100) / 100 : 0;
+  const unitPrice = item ? Math.round(item.sale_price_eur * (1 - Number(discount)) * 100) / 100 : 0;
   const total = quantity > 0 ? quantity * unitPrice : 0;
   const margin = item && quantity > 0 ? total - quantity * item.unit_cost_eur : 0;
   const tooMany = item && quantity > available;
@@ -67,6 +71,7 @@ export function SaleForm({
                 const next = items.find((i) => i.item_id === ev.target.value);
                 setItemId(ev.target.value);
                 setLocationId(bestLocation(next));
+                applyRule(next, qty);
               }}
               className={controlClass(e.item_id)}
             >
@@ -103,15 +108,23 @@ export function SaleForm({
                 max={LIMITS.orderQty.max}
                 step="1"
                 value={qty}
-                onChange={(ev) => setQty(ev.target.value)}
+                onChange={(ev) => {
+                  setQty(ev.target.value);
+                  applyRule(item, ev.target.value);
+                }}
                 className={controlClass(qtyError)}
               />
             </Field>
-            <Field label="Discount" name="discount" error={e.discount}>
+            <Field
+              label="Discount"
+              name="discount"
+              error={e.discount}
+              hint={suggested ? `${discountLabel(suggested)} volume discount for 3+ machines` : undefined}
+            >
               <select id="discount" name="discount" value={discount} onChange={(ev) => setDiscount(ev.target.value)} className={controlClass(e.discount)}>
                 {DISCOUNTS.map((d) => (
-                  <option key={d} value={d}>
-                    {d === 0 ? "No discount" : `${d} %`}
+                  <option key={d} value={String(d)}>
+                    {discountLabel(d)}
                   </option>
                 ))}
               </select>
@@ -124,7 +137,7 @@ export function SaleForm({
         <h2 className="mb-4 font-bold text-ink">Order summary</h2>
         <dl className="space-y-3 text-sm">
           <Row label="List price" value={item ? eur(item.sale_price_eur) : "–"} />
-          <Row label="Unit price" value={item ? eur(unitPrice) : "–"} hint={Number(discount) ? `${discount} % discount` : undefined} />
+          <Row label="Unit price" value={item ? eur(unitPrice) : "–"} hint={Number(discount) ? `${discountLabel(Number(discount))} discount` : undefined} />
           <Row label="Quantity" value={quantity > 0 ? num(quantity) : "–"} />
           <Row label="Margin" value={item ? eur(margin) : "–"} hint={total > 0 ? `${((margin / total) * 100).toFixed(0)} % of revenue` : undefined} />
           <Row label="Stock left at location" value={item ? num(Math.max(available - (quantity > 0 ? quantity : 0), 0)) : "–"} />

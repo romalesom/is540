@@ -15,8 +15,17 @@ export const LIMITS = {
   orderQty: { min: 1, max: 500 },
 };
 
-// Discounts seen in the sales data are 0 % and 5 %; 10 % is the allowed maximum.
-export const DISCOUNTS = [0, 5, 10] as const;
+// Discounts are stored as decimal fractions (0.05 = 5 %) in sales_orders.discount,
+// whose check constraint allows exactly these steps.
+export const DISCOUNTS = [0, 0.05, 0.1] as const;
+
+// Rule found in the sales data: machines ordered 3 or more at a time get 5 %.
+// The sales form preselects it; the manager can still change it.
+export function suggestedDiscount(trackingMode: string | undefined, quantity: number): number {
+  return trackingMode === "Serialized" && quantity >= 3 ? 0.05 : 0;
+}
+
+export const discountLabel = (d: number) => (d ? `${Math.round(d * 100)} %` : "No discount");
 
 export class Fields {
   errors: Record<string, string> = {};

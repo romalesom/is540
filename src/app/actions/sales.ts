@@ -61,7 +61,7 @@ export async function createSalesOrder(_prev: FormState, form: FormData): Promis
   if (!f.valid || !item) return f.fail();
 
   // The unit price is derived from the list price and discount, never typed in.
-  const unitPrice = Math.round(Number(item.sale_price_eur) * (1 - discount / 100) * 100) / 100;
+  const unitPrice = Math.round(Number(item.sale_price_eur) * (1 - discount) * 100) / 100;
   const orderId = await nextOrderId();
   const { error } = await client.from("sales_orders").insert({
     order_id: orderId,
@@ -71,6 +71,7 @@ export async function createSalesOrder(_prev: FormState, form: FormData): Promis
     location_id: locationId,
     quantity,
     unit_price_eur: unitPrice,
+    discount,
     order_status: "Open",
   });
   if (error) return { ok: false, message: `Order could not be saved: ${error.message}`, values: f.values };

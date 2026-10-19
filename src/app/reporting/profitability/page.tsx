@@ -23,15 +23,21 @@ export default async function Profitability({ searchParams }: PageProps<"/report
   const models = [...groupBy(lines, (l) => l.item_id)]
     .map(([k, v]) => {
       const tt = totals(v);
-      return { id: k, model: v[0].model, category: v[0].category, ...tt, marginPct: pct(tt.margin, tt.revenue), discount: 1 - pct(tt.revenue, tt.listRevenue) };
+      return { id: k, model: v[0].model, category: v[0].category, ...tt, marginPct: pct(tt.margin, tt.revenue), discount: pct(tt.discountAmount, tt.listRevenue) };
     })
     .sort((a, b) => b.margin - a.margin);
 
   const monthly = groupBy(lines, (l) => l.month);
   const trend = range.months.map((m) => {
     const tt = totals(monthly.get(m) ?? []);
-    return { x: m, marginPct: tt.revenue ? tt.margin / tt.revenue : 0 };
+    return { x: m, marginPct: tt.revenue ? tt.margin / tt.revenue : 0, discountAmount: tt.discountAmount, discountedShare: pct(tt.discountedOrders, tt.orders) };
   });
+  const discountByCategory = [...groupBy(lines, (l) => l.category)]
+    .map(([k, v]) => {
+      const tt = totals(v);
+      return { key: k, label: k, value: tt.discountAmount, sub: fmt(pct(tt.discountAmount, tt.listRevenue), "pct") };
+    })
+    .sort((a, b) => b.value - a.value);
 
   return (
     <>
@@ -45,7 +51,14 @@ export default async function Profitability({ searchParams }: PageProps<"/report
       <KpiRow>
         <Kpi label="Gross margin" value={t.margin} format="eur" delta={delta(t.margin, p.margin, c)} />
         <Kpi label="Margin %" value={pct(t.margin, t.revenue)} format="pct" delta={delta(pct(t.margin, t.revenue), pct(p.margin, p.revenue), c)} />
-        <Kpi label="Discount rate" value={1 - pct(t.revenue, t.listRevenue)} format="pct" upIsGood={false} hint={`${fmt(t.listRevenue - t.revenue, "eur")} given away`} />
+        <Kpi
+          label="Discount rate"
+          value={pct(t.discountAmount, t.listRevenue)}
+          format="pct"
+          upIsGood={false}
+          delta={delta(pct(t.discountAmount, t.listRevenue), pct(p.discountAmount, p.listRevenue), c)}
+          hint={`${fmt(t.discountAmount, "eur")} given away · ${fmt(pct(t.discountedOrders, t.orders), "pct")} of orders`}
+        />
         <Kpi label="Avg selling price" value={t.units ? t.revenue / t.units : 0} format="eur" hint="revenue ÷ units" />
         <Kpi label="Margin per order" value={t.orders ? t.margin / t.orders : 0} format="eur" hint={`${fmt(t.orders, "num")} orders`} />
       </KpiRow>
@@ -59,6 +72,30 @@ export default async function Profitability({ searchParams }: PageProps<"/report
         </ChartCard>
         <ChartCard title="Margin % per month" subtitle="Does pricing hold up over time?" table={{ head: ["Month", "Margin %"], rows: trend.map((r) => [r.x, fmt(r.marginPct, "pct")]) }}>
           <TrendChart data={trend} series={[{ key: "marginPct", label: "Margin %" }]} format="pct" height={240} />
+        </ChartCard>
+
+        <ChartCard
+          title="Discount given per month"
+          subtitle="List price minus net price, in €"
+          hint="Click a month to filter"
+          table={{ head: ["Month", "Discount", "Orders discounted"], rows: trend.map((r) => [r.x, fmt(r.discountAmount, "eur"), fmt(r.discountedShare, "pct")]) }}
+        >
+          <TrendChart data={trend} series={[{ key: "discountAmount", label: "Discount" }]} format="eur" drillParam={range.months.length > 1 ? "period" : undefined} height={240} />
+        </ChartCard>
+        <ChartCard
+          title="Share of orders discounted"
+          subtitle="Orders with a discount ÷ all orders, per month"
+          table={{ head: ["Month", "Orders discounted"], rows: trend.map((r) => [r.x, fmt(r.discountedShare, "pct")]) }}
+        >
+          <TrendChart data={trend} series={[{ key: "discountedShare", label: "Orders discounted" }]} format="pct" height={240} />
+        </ChartCard>
+        <ChartCard
+          title="Discount by category"
+          subtitle="Discount in € · discount rate next to the name"
+          hint="Click to filter"
+          table={{ head: ["Category", "Discount", "Discount rate"], rows: discountByCategory.map((r) => [r.label, fmt(r.value, "eur"), r.sub]) }}
+        >
+          <BarList data={discountByCategory} format="eur" filterParam="category" selected={f.category} />
         </ChartCard>
 
         <ChartCard

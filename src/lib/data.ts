@@ -258,7 +258,10 @@ export type SalesOrder = {
   item_id: string;
   location_id: string;
   quantity: number;
+  /** Net price per unit after discount. */
   unit_price_eur: number;
+  /** Decimal fraction, e.g. 0.05 = 5 %. */
+  discount: number;
   order_status: "Open" | "Shipped" | "Delivered" | "Cancelled";
 };
 

@@ -5,6 +5,7 @@ import { Icon } from "@/components/icon";
 import { Notice } from "@/components/notice";
 import { ButtonLink, Card, EmptyState, PageHeader, eur, num } from "@/components/ui";
 import { countSalesOrders, getCustomers, getInventory, getLocations, getSalesOrders } from "@/lib/data";
+import { fmt } from "@/lib/format";
 import { getRole } from "@/lib/role";
 
 const TABS = [
@@ -108,7 +109,10 @@ export default async function SalesPage({ searchParams }: PageProps<"/sales">) {
                       <Link href={`/inventory/${o.item_id}`} className="truncate text-ink">
                         {num(o.quantity)} × {item?.model ?? o.item_id}
                       </Link>
-                      <span className="text-right font-semibold text-ink">{eur(lineTotal)}</span>
+                      <span className="text-right font-semibold text-ink">
+                        {eur(lineTotal)}
+                        {Number(o.discount) > 0 && <span className="font-normal text-muted"> · −{fmt(Number(o.discount), "pct")}</span>}
+                      </span>
                       <span className="truncate text-muted">{locationName.get(o.location_id)}</span>
                       <span className="text-right text-muted">{margin != null ? `margin ${eur(margin)}` : ""}</span>
                     </div>
@@ -161,7 +165,7 @@ export default async function SalesPage({ searchParams }: PageProps<"/sales">) {
                   const item = itemById.get(o.item_id);
                   const lineTotal = o.quantity * Number(o.unit_price_eur);
                   const margin = item ? lineTotal - o.quantity * item.unit_cost_eur : null;
-                  const discounted = item && Number(o.unit_price_eur) < item.sale_price_eur;
+                  const discount = Number(o.discount);
                   const next = NEXT[o.order_status];
                   return (
                     <tr key={o.order_id} className="hover:bg-canvas">
@@ -179,7 +183,7 @@ export default async function SalesPage({ searchParams }: PageProps<"/sales">) {
                       <td className="px-4 py-3 text-right tabular-nums">{num(o.quantity)}</td>
                       <td className="px-4 py-3 text-right tabular-nums">
                         <div className="font-semibold text-ink">{eur(lineTotal)}</div>
-                        {discounted && <div className="text-xs text-muted">discounted</div>}
+                        {discount > 0 && <div className="text-xs text-muted">{fmt(discount, "pct")} discount</div>}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">{margin != null ? eur(margin) : "–"}</td>
                       <td className="px-4 py-3">

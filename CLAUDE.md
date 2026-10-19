@@ -37,7 +37,7 @@ Prüfen mit `npx tsc --noEmit`, `npm run lint` und `npm run build`. Nach neuen R
 - **Lieferanten je Artikel** (n:m): in der Detailansicht hinzufügen, Preis und Lieferzeit ändern, entfernen (der letzte Lieferant ist nicht entfernbar); Seite `/suppliers` zeigt alle Lieferanten mit Artikeln und Preisen
 - **Remove:** nur bei Bestand 0 und ohne offene Bestellung; setzt immer den Status `Discontinued` (Soft Delete), nie hartes Löschen
 - **Purchase orders:** anlegen mit Lieferantenauswahl (günstigster vorausgewählt, bei Gleichstand kürzere Lieferzeit; Preis und Liefertermin vom gewählten Lieferanten); Receive (Maschinen → neue Assets, Zubehör → `inventory` +); Cancel
-- **Sales orders:** anlegen bucht sofort ab (Maschinen per FIFO auf `Sold`); Status Open → Shipped → Delivered; Cancel nur bei Open, mit Rückbuchung
+- **Sales orders:** anlegen bucht sofort ab (Maschinen per FIFO auf `Sold`); Rabatt 0 / 5 / 10 %, bei Maschinen ab 3 Stück sind 5 % vorausgewählt (änderbar); Status Open → Shipped → Delivered; Cancel nur bei Open, mit Rückbuchung
 - **Service monitor:** überfällig, kommende Termine, verkauft und nie gewartet; Record service (nächster Termin +180 Tage)
 
 **Reporting** (`/reporting`, eigenes Seitenmenü mit „Back to ERP“): Management summary, Inventory health, Profitability, Purchasing & suppliers (inkl. Preisvergleich über Lieferanten), After-sales & service sowie Drill-through `/reporting/item/[id]`. Jede Seite hat eigene Filter.
@@ -51,7 +51,7 @@ Kennzahlen und Formeln liegen zentral in [src/lib/reporting.ts](src/lib/reportin
 - `assets`: nur Maschinen; `status` InStock | InService | Sold | Scrapped; `order_id` verweist auf den Verkauf
 - `inventory`: nur Mengenartikel (Zubehör), je Artikel und Standort
 - `purchase_orders`: Status Ordered | Received | Cancelled
-- `sales_orders` (Kundenaufträge, bis 19.10.2026 `orders`): Status Open | Shipped | Delivered | Cancelled. Einkauf liegt in `purchase_orders`.
+- `sales_orders` (Kundenaufträge, bis 19.10.2026 `orders`): Status Open | Shipped | Delivered | Cancelled. Einkauf liegt in `purchase_orders`. `unit_price_eur` ist der **Nettopreis** nach Rabatt; `discount` (seit 19.10.2026) speichert den Rabatt als Dezimalbruch (0.05 = 5 %, erlaubt nur 0 / 0.05 / 0.10). Listenpreis zum Auftragszeitpunkt = `unit_price_eur / (1 − discount)`.
 - Weitere Tabellen: `service_history`, `suppliers`, `locations`, `customers`
 - Views:
   - `v_stock`: Bestand = InStock-Assets + `inventory`
@@ -82,8 +82,7 @@ Kennzahlen und Formeln liegen zentral in [src/lib/reporting.ts](src/lib/reportin
    delete from items           where item_id    > 'MCH-032';
    commit;
    ```
-2. **Rabattregel:** Das Verkaufsformular erlaubt 0, 5 oder 10 % frei, die Daten folgen „5 % bei Maschinen ab 3 Stück“. Noch nicht entschieden, ob angeglichen wird.
-3. **Storno nach Versand** (Shipped → Cancelled) ist nicht vorgesehen. Bei Bedarf mit dem Nutzer klären.
-4. **Atomarität:** Wareneingang und Verkauf schreiben mehrere Tabellen ohne gemeinsame Transaktion. Für den Prototyp akzeptiert; später als DB-Funktion möglich.
-5. **Alte Spalte `items.supplier_id` entfernen:** wird von der App nicht mehr benutzt (seit `item_suppliers`), ist aber noch vorhanden und nullable. Im SQL-Editor ausführen: `alter table public.items drop column supplier_id;`
-6. **Abgabe-Artefakte** stehen noch aus: Foliensatz (PDF), Video (max. 12 Min.), ZIP.
+2. **Storno nach Versand** (Shipped → Cancelled) ist nicht vorgesehen. Bei Bedarf mit dem Nutzer klären.
+3. **Atomarität:** Wareneingang und Verkauf schreiben mehrere Tabellen ohne gemeinsame Transaktion. Für den Prototyp akzeptiert; später als DB-Funktion möglich.
+4. **Alte Spalte `items.supplier_id` entfernen:** wird von der App nicht mehr benutzt (seit `item_suppliers`), ist aber noch vorhanden und nullable. Im SQL-Editor ausführen: `alter table public.items drop column supplier_id;`
+5. **Abgabe-Artefakte** stehen noch aus: Foliensatz (PDF), Video (max. 12 Min.), ZIP.
