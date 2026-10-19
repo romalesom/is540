@@ -37,22 +37,34 @@ export async function createPurchaseOrder(_prev: FormState, form: FormData): Pro
     : { data: null };
   if (!item) f.errors.item_id = "Please choose an item.";
   else if (item.status !== "Active") f.errors.item_id = "Discontinued items cannot be ordered.";
-  if (!f.valid || !item) return f.fail();
 
-  // Price, supplier and dates come from master data, never from the form,
-  // so the order total is always calculated and cannot be typed in.
-  const supplier = (await getSuppliers()).find((s) => s.supplier_id === item.supplier_id);
+  // The form only names the supplier; its price and lead time come from the
+  // item's supplier list, so the order total cannot be typed in.
+  const supplierId = f.text("supplier_id", "Supplier");
+  const { data: offer } =
+    item && supplierId
+      ? await db()
+          .from("item_suppliers")
+          .select("unit_cost_eur, lead_time_days")
+          .eq("item_id", item.item_id)
+          .eq("supplier_id", supplierId)
+          .maybeSingle<{ unit_cost_eur: number; lead_time_days: number | null }>()
+      : { data: null };
+  if (item && supplierId && !offer) f.errors.supplier_id = "This supplier does not deliver this item.";
+  if (!f.valid || !item || !offer) return f.fail();
+
+  const supplier = (await getSuppliers()).find((s) => s.supplier_id === supplierId);
   const orderDate = today();
   const id = await nextPurchaseOrderId(item.item_id, orderDate);
   const { error } = await db().from("purchase_orders").insert({
     purchase_order_id: id,
     order_date: orderDate,
-    supplier_id: item.supplier_id,
+    supplier_id: supplierId,
     item_id: item.item_id,
     location_id: locationId,
     quantity,
-    unit_cost_eur: Number(item.unit_cost_eur),
-    expected_date: addDays(orderDate, supplier?.lead_time_days ?? 0),
+    unit_cost_eur: Number(offer.unit_cost_eur),
+    expected_date: addDays(orderDate, offer.lead_time_days ?? supplier?.lead_time_days ?? 0),
     received_date: null,
     status: "Ordered",
   });

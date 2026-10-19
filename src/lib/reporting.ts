@@ -1,5 +1,6 @@
 import "server-only";
 import { cache } from "react";
+import { groupOffers, type ItemSupplierRow } from "./data";
 import { db } from "./supabase";
 import type { Customer, Item, Location, Supplier } from "./types";
 
@@ -54,6 +55,7 @@ const PK: Record<string, string> = {
   assets: "asset_id",
   service_history: "service_id",
   v_stock: "item_id",
+  item_suppliers: "item_id",
 };
 
 type OrderRow = {
@@ -107,9 +109,10 @@ export type SaleLine = {
 
 // Loaded once per request, shared by every report on the page.
 export const loadDataset = cache(async () => {
-  const [items, suppliers, locations, customers, orders, pos, assets, services, stock] = await Promise.all([
+  const [items, suppliers, links, locations, customers, orders, pos, assets, services, stock] = await Promise.all([
     fetchAll<Item>("items", "*"),
     fetchAll<Supplier>("suppliers", "*"),
+    fetchAll<ItemSupplierRow>("item_suppliers", "*"),
     fetchAll<Location>("locations", "*"),
     fetchAll<Customer>("customers", "*"),
     fetchAll<OrderRow>("sales_orders", "*"),
@@ -169,6 +172,7 @@ export const loadDataset = cache(async () => {
     assets,
     services,
     stockByItem,
+    offersByItem: groupOffers(suppliers, links),
     latestSale,
     earliestSale,
   };

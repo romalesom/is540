@@ -45,7 +45,7 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
         !q ||
         r.model.toLowerCase().includes(q) ||
         r.item_id.toLowerCase().includes(q) ||
-        r.supplier_name.toLowerCase().includes(q),
+        r.suppliers.some((o) => o.supplier_name.toLowerCase().includes(q)),
     )
     .sort((a, b) => {
       const x = SORTS[sort].get(a);
@@ -148,6 +148,7 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
                       </Link>
                       <div className="text-xs text-muted">
                         {r.supplier_name}
+                        {r.suppliers.length > 1 && ` +${r.suppliers.length - 1} more`}
                         {r.status === "Discontinued" && " · Discontinued"}
                       </div>
                     </td>

@@ -1,12 +1,12 @@
 import { ManagerOnly, PageHeader } from "@/components/ui";
-import { getInventory, getLocations, getSuppliers } from "@/lib/data";
+import { getInventory, getLocations } from "@/lib/data";
 import { getRole } from "@/lib/role";
 import { OrderForm } from "./order-form";
 
 export default async function NewOrderPage({ searchParams }: PageProps<"/orders/new">) {
   if ((await getRole()) !== "manager") return <ManagerOnly />;
   const sp = await searchParams;
-  const [inventory, locations, suppliers] = await Promise.all([getInventory(), getLocations(), getSuppliers()]);
+  const [inventory, locations] = await Promise.all([getInventory(), getLocations()]);
   // Items needing replenishment first, so the most urgent choice is on top.
   const items = inventory
     .filter((i) => i.status === "Active")
@@ -18,9 +18,9 @@ export default async function NewOrderPage({ searchParams }: PageProps<"/orders/
       <PageHeader
         eyebrow="Purchasing"
         title="New purchase order"
-        description="Turn a low-stock item into an order. Supplier, price and delivery date come from master data."
+        description="Turn a low-stock item into an order. The cheapest supplier is preselected; price and delivery date follow the supplier you choose."
       />
-      <OrderForm items={items} locations={locations} suppliers={suppliers} preselected={preselected} today={new Date().toISOString().slice(0, 10)} />
+      <OrderForm items={items} locations={locations} preselected={preselected} today={new Date().toISOString().slice(0, 10)} />
     </div>
   );
 }

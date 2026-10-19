@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "./supabase";
-import type { Customer, InventoryRow, Item, Location, StockStatus, Supplier } from "./types";
+import type { Customer, InventoryRow, Item, Location, StockStatus, Supplier, SupplierOffer } from "./types";
 
 // The client is untyped, so callers state the row shape they selected.
 function check<T>(res: { data: unknown; error: { message: string } | null }, what: string): T {
@@ -26,13 +26,40 @@ export function stockStatus(qty: number, reorderPoint: number): StockStatus {
   return "ok";
 }
 
+export type ItemSupplierRow = { item_id: string; supplier_id: string; unit_cost_eur: number; lead_time_days: number | null };
+
+/** Cheapest offer first; ties go to the shorter lead time, then the name. */
+export function compareOffers(a: SupplierOffer, b: SupplierOffer) {
+  return a.unit_cost_eur - b.unit_cost_eur || a.lead_time_days - b.lead_time_days || a.supplier_name.localeCompare(b.supplier_name);
+}
+
+export function groupOffers(suppliers: Supplier[], links: ItemSupplierRow[]) {
+  const byId = new Map(suppliers.map((s) => [s.supplier_id, s]));
+  const map = new Map<string, SupplierOffer[]>();
+  for (const l of links) {
+    const s = byId.get(l.supplier_id);
+    if (!s) continue;
+    const offer: SupplierOffer = {
+      supplier_id: l.supplier_id,
+      supplier_name: s.supplier_name,
+      unit_cost_eur: Number(l.unit_cost_eur),
+      lead_time_days: l.lead_time_days ?? s.lead_time_days,
+      lead_time_override: l.lead_time_days,
+    };
+    map.set(l.item_id, [...(map.get(l.item_id) ?? []), offer]);
+  }
+  for (const list of map.values()) list.sort(compareOffers);
+  return map;
+}
+
 // One row per item with stock summed over locations. Stock comes from v_stock:
 // serialized machines are counted as InStock assets, accessories come from inventory.
 export async function getInventory(): Promise<InventoryRow[]> {
   const client = db();
-  const [items, suppliers, stock, openPos] = await Promise.all([
+  const [items, suppliers, links, stock, openPos] = await Promise.all([
     client.from("items").select("*").order("item_id"),
     client.from("suppliers").select("*"),
+    client.from("item_suppliers").select("*"),
     client.from("v_stock").select("*"),
     client.from("purchase_orders").select("item_id, quantity").eq("status", "Ordered"),
   ]);
@@ -45,7 +72,10 @@ export async function getInventory(): Promise<InventoryRow[]> {
   );
   const poRows = check<{ item_id: string; quantity: number }[]>(openPos, "purchase orders");
 
-  const supplierName = new Map(supplierRows.map((s) => [s.supplier_id, s.supplier_name]));
+  const offers = groupOffers(
+    supplierRows,
+    check<ItemSupplierRow[]>(links, "item suppliers"),
+  );
   const byItem = new Map<string, Record<string, number>>();
   for (const s of stockRows) {
     const rec = byItem.get(s.item_id) ?? {};
@@ -62,7 +92,8 @@ export async function getInventory(): Promise<InventoryRow[]> {
       ...item,
       unit_cost_eur: Number(item.unit_cost_eur),
       sale_price_eur: Number(item.sale_price_eur),
-      supplier_name: supplierName.get(item.supplier_id) ?? item.supplier_id,
+      suppliers: offers.get(item.item_id) ?? [],
+      supplier_name: offers.get(item.item_id)?.[0]?.supplier_name ?? "No supplier",
       stock_by_location: stockByLocation,
       stock_qty: stockQty,
       on_order_qty: onOrder.get(item.item_id) ?? 0,

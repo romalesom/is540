@@ -33,19 +33,21 @@ Prüfen mit `npx tsc --noEmit`, `npm run lint` und `npm run build`. Nach neuen R
 - **Home:** KPIs und Low-Stock-Alarme mit „Reorder“
 - **Inventory:** Suche, Sortierung, Filter nach Kategorie, Standort und Bestandsstatus
 - **Detail:** Bestand je Standort, Bewegungen, Service-Historie, Geräte
-- **New item / Edit:** ID-Vorschlag, Prüfung auf doppelte IDs und plausible Werte
+- **New item / Edit:** ID-Vorschlag, Prüfung auf doppelte IDs und plausible Werte; beim Anlegen mindestens ein Lieferant mit Preis
+- **Lieferanten je Artikel** (n:m): in der Detailansicht hinzufügen, Preis und Lieferzeit ändern, entfernen (der letzte Lieferant ist nicht entfernbar); Seite `/suppliers` zeigt alle Lieferanten mit Artikeln und Preisen
 - **Remove:** nur bei Bestand 0 und ohne offene Bestellung; setzt immer den Status `Discontinued` (Soft Delete), nie hartes Löschen
-- **Purchase orders:** anlegen; Receive (Maschinen → neue Assets, Zubehör → `inventory` +); Cancel
+- **Purchase orders:** anlegen mit Lieferantenauswahl (günstigster vorausgewählt, bei Gleichstand kürzere Lieferzeit; Preis und Liefertermin vom gewählten Lieferanten); Receive (Maschinen → neue Assets, Zubehör → `inventory` +); Cancel
 - **Sales orders:** anlegen bucht sofort ab (Maschinen per FIFO auf `Sold`); Status Open → Shipped → Delivered; Cancel nur bei Open, mit Rückbuchung
 - **Service monitor:** überfällig, kommende Termine, verkauft und nie gewartet; Record service (nächster Termin +180 Tage)
 
-**Reporting** (`/reporting`, eigenes Seitenmenü mit „Back to ERP“): Management summary, Inventory health, Profitability, Purchasing & suppliers, After-sales & service sowie Drill-through `/reporting/item/[id]`. Jede Seite hat eigene Filter.
+**Reporting** (`/reporting`, eigenes Seitenmenü mit „Back to ERP“): Management summary, Inventory health, Profitability, Purchasing & suppliers (inkl. Preisvergleich über Lieferanten), After-sales & service sowie Drill-through `/reporting/item/[id]`. Jede Seite hat eigene Filter.
 Kennzahlen und Formeln liegen zentral in [src/lib/reporting.ts](src/lib/reporting.ts). Die Daten werden serverseitig seitenweise geladen (PostgREST liefert max. 1000 Zeilen) und in TypeScript aggregiert.
 
 **Layout:** responsiv. Unter 768 px Kopfzeile mit Drawer, Tabellen werden zu Karten. Design nach bee360.com (Rot `#b61f29`, Open Sans, Material Symbols). Die Diagrammfarben kommen aus einer farbenblind-geprüften Palette in [src/components/charts.tsx](src/components/charts.tsx).
 
 ## Datenmodell (Supabase-Projekt IS540, `ijvoiynfbyfdklppiyhp`, eu-central-1)
-- `items`: `tracking_mode` Serialized | Quantity, `status` Active | Discontinued
+- `items`: `tracking_mode` Serialized | Quantity, `status` Active | Discontinued. `unit_cost_eur` ist der **Standardpreis** (Bewertung, Marge, Prüfung Verkaufspreis ≥ Kosten), nicht der Einkaufspreis eines Lieferanten.
+- `item_suppliers` (n:m Artikel ↔ Lieferant, seit 19.10.2026): `unit_cost_eur` = Angebotspreis des Lieferanten, `lead_time_days` optional (leer → `suppliers.lead_time_days`). Ersetzt die frühere Spalte `items.supplier_id`.
 - `assets`: nur Maschinen; `status` InStock | InService | Sold | Scrapped; `order_id` verweist auf den Verkauf
 - `inventory`: nur Mengenartikel (Zubehör), je Artikel und Standort
 - `purchase_orders`: Status Ordered | Received | Cancelled

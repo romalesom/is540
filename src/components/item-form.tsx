@@ -5,7 +5,10 @@ import { useActionState, useState } from "react";
 import type { Item, Supplier } from "@/lib/types";
 import { LIMITS, type FormState } from "@/lib/validation";
 import { Field, FormError, SubmitButton, controlClass } from "./forms";
+import { Icon } from "./icon";
 import { eur } from "./ui";
+
+type OfferRow = { key: number; supplier_id: string; cost: string; lead: string };
 
 type Props = {
   action: (prev: FormState, form: FormData) => Promise<FormState>;
@@ -27,6 +30,11 @@ export function ItemForm({ action, suppliers, categories, item, suggestedId, can
   const [price, setPrice] = useState(v("sale_price_eur"));
   const margin = Number(price) - Number(cost);
   const marginPct = Number(price) > 0 ? (margin / Number(price)) * 100 : 0;
+
+  // Supplier rows only exist when creating; afterwards they are managed on the item page.
+  const [rows, setRows] = useState<OfferRow[]>([{ key: 0, supplier_id: "", cost: "", lead: "" }]);
+  const setRow = (key: number, patch: Partial<OfferRow>) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  const leadOf = (id: string) => suppliers.find((s) => s.supplier_id === id)?.lead_time_days;
 
   return (
     // Remount after a server response: React resets forms after an action, and
@@ -56,16 +64,6 @@ export function ItemForm({ action, suppliers, categories, item, suggestedId, can
             ))}
           </datalist>
         </Field>
-        <Field label="Supplier" name="supplier_id" error={e.supplier_id}>
-          <select id="supplier_id" name="supplier_id" defaultValue={v("supplier_id")} required className={controlClass(e.supplier_id)}>
-            <option value="">Choose supplier…</option>
-            {suppliers.map((s) => (
-              <option key={s.supplier_id} value={s.supplier_id}>
-                {s.supplier_name} · {s.lead_time_days} days lead time
-              </option>
-            ))}
-          </select>
-        </Field>
         {isNew ? (
           <Field label="Tracking" name="tracking_mode" error={e.tracking_mode} hint="Machines are tracked by serial number, parts by quantity.">
             <select id="tracking_mode" name="tracking_mode" defaultValue={v("tracking_mode", "Serialized")} className={controlClass(e.tracking_mode)}>
@@ -82,10 +80,10 @@ export function ItemForm({ action, suppliers, categories, item, suggestedId, can
 
       <h2 className="mb-4 mt-8 text-xs font-bold uppercase tracking-[0.12em] text-muted">Prices & replenishment</h2>
       <div className="grid gap-5 md:grid-cols-2">
-        <Field label="Unit cost (€)" name="unit_cost_eur" error={e.unit_cost_eur} hint={`Purchase price, ${LIMITS.price.min}–${LIMITS.price.max} €`}>
+        <Field label="Standard cost (€)" name="unit_cost_eur" error={e.unit_cost_eur} hint="Values stock and margin. Supplier prices are kept per supplier.">
           <input id="unit_cost_eur" name="unit_cost_eur" type="number" step="0.01" min={LIMITS.price.min} max={LIMITS.price.max} value={cost} onChange={(ev) => setCost(ev.target.value)} required className={controlClass(e.unit_cost_eur)} />
         </Field>
-        <Field label="Sale price (€)" name="sale_price_eur" error={e.sale_price_eur} hint={cost && price ? `Margin ${eur(margin)} per unit (${marginPct.toFixed(0)} %)` : "Must not be below unit cost"}>
+        <Field label="Sale price (€)" name="sale_price_eur" error={e.sale_price_eur} hint={cost && price ? `Margin ${eur(margin)} per unit (${marginPct.toFixed(0)} %)` : "Must not be below the standard cost"}>
           <input id="sale_price_eur" name="sale_price_eur" type="number" step="0.01" min={LIMITS.price.min} max={LIMITS.price.max} value={price} onChange={(ev) => setPrice(ev.target.value)} required className={controlClass(e.sale_price_eur)} />
         </Field>
         <Field label="Reorder point" name="reorder_point" error={e.reorder_point} hint="A low-stock warning appears at or below this stock level.">
@@ -95,6 +93,68 @@ export function ItemForm({ action, suppliers, categories, item, suggestedId, can
           <input id="reorder_qty" name="reorder_qty" type="number" step="1" min={LIMITS.reorderQty.min} max={LIMITS.reorderQty.max} defaultValue={v("reorder_qty", "1")} required className={controlClass(e.reorder_qty)} />
         </Field>
       </div>
+
+      {isNew ? (
+        <>
+          <h2 className="mb-1 mt-8 text-xs font-bold uppercase tracking-[0.12em] text-muted">Suppliers</h2>
+          <p className="mb-4 text-xs text-muted">
+            At least one. Purchase orders preselect the cheapest supplier. Leave the lead time empty to use the supplier&apos;s default.
+          </p>
+          <div className="grid gap-3">
+            {rows.map((r, i) => (
+              <div key={r.key} className="grid grid-cols-[1fr_auto] items-end gap-2 rounded-control border border-line p-3 md:grid-cols-[2fr_1fr_1fr_auto]">
+                <label className="col-span-2 text-xs font-semibold text-ink md:col-span-1">
+                  Supplier {i + 1}
+                  <select
+                    name="offer_supplier"
+                    value={r.supplier_id}
+                    onChange={(ev) => setRow(r.key, { supplier_id: ev.target.value })}
+                    className={`mt-1 ${controlClass()}`}
+                  >
+                    <option value="">Choose supplier…</option>
+                    {suppliers.map((s) => (
+                      <option key={s.supplier_id} value={s.supplier_id} disabled={rows.some((o) => o.key !== r.key && o.supplier_id === s.supplier_id)}>
+                        {s.supplier_name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs font-semibold text-ink">
+                  Price (€)
+                  <input name="offer_cost" type="number" step="0.01" min={LIMITS.price.min} max={LIMITS.price.max} value={r.cost} onChange={(ev) => setRow(r.key, { cost: ev.target.value })} className={`mt-1 ${controlClass()}`} />
+                </label>
+                <label className="text-xs font-semibold text-ink">
+                  Lead time (days)
+                  <input name="offer_lead" type="number" step="1" min={0} max={365} value={r.lead} placeholder={leadOf(r.supplier_id) != null ? `default ${leadOf(r.supplier_id)}` : "default"} onChange={(ev) => setRow(r.key, { lead: ev.target.value })} className={`mt-1 ${controlClass()}`} />
+                </label>
+                <button
+                  type="button"
+                  aria-label={`Remove supplier ${i + 1}`}
+                  disabled={rows.length === 1}
+                  onClick={() => setRows((rs) => rs.filter((o) => o.key !== r.key))}
+                  className="grid h-[42px] w-[42px] place-items-center rounded-control text-muted hover:bg-canvas hover:text-brand disabled:opacity-30"
+                >
+                  <Icon name="delete" />
+                </button>
+              </div>
+            ))}
+          </div>
+          {e.suppliers && <p className="mt-2 text-xs font-semibold text-brand">{e.suppliers}</p>}
+          {rows.length < suppliers.length && (
+            <button
+              type="button"
+              onClick={() => setRows((rs) => [...rs, { key: Math.max(...rs.map((o) => o.key)) + 1, supplier_id: "", cost: "", lead: "" }])}
+              className="mt-3 inline-flex items-center gap-1 rounded-control px-3 py-2 text-sm font-semibold text-brand hover:bg-brand-soft"
+            >
+              <Icon name="add" className="!text-[18px]" /> Add supplier
+            </button>
+          )}
+        </>
+      ) : (
+        <p className="mt-6 flex items-center gap-2 text-xs text-muted">
+          <Icon name="info" className="!text-[16px]" /> Suppliers and their prices are managed on the item page.
+        </p>
+      )}
 
       <div className="mt-8 flex justify-end gap-2 border-t border-line pt-6">
         <Link href={cancelHref} className="rounded-control border border-line px-4 py-2.5 text-sm font-semibold text-ink hover:border-muted">

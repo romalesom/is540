@@ -58,6 +58,20 @@ export default async function Purchasing({ searchParams }: PageProps<"/reporting
     .filter((s) => s.orders > 0)
     .sort((a, b) => b.volume - a.volume);
 
+  // Price comparison: only items offered by more than one supplier.
+  const comparison = [...ds.offersByItem]
+    .filter(([itemId, offers]) => offers.length > 1 && (!f.category || ds.itemById.get(itemId)?.category === f.category))
+    .map(([itemId, offers]) => {
+      const cheapest = offers[0].unit_cost_eur;
+      const dearest = offers[offers.length - 1].unit_cost_eur;
+      const overpaid = pos
+        .filter((p) => p.item_id === itemId)
+        .reduce((a, p) => a + Math.max(p.unit_cost_eur - cheapest, 0) * p.quantity, 0);
+      return { itemId, model: ds.itemById.get(itemId)?.model ?? itemId, offers, cheapest, dearest, spread: pct(dearest - cheapest, cheapest), overpaid };
+    })
+    .sort((a, b) => b.overpaid - a.overpaid || b.spread - a.spread);
+  const totalOverpaid = comparison.reduce((a, c) => a + c.overpaid, 0);
+
   const monthly = range.months.map((m) => {
     const rec = received.filter((p) => p.order_date.startsWith(m));
     return { x: m, onTime: rec.length ? rec.filter((p) => p.delay! <= 0).length / rec.length : 0 };
@@ -129,6 +143,45 @@ export default async function Purchasing({ searchParams }: PageProps<"/reporting
               </tbody>
             </table>
           </div>
+        </ChartCard>
+        <ChartCard
+          className="xl:col-span-2"
+          title="Price comparison across suppliers"
+          subtitle={
+            comparison.length
+              ? `Items with several suppliers · ${fmt(totalOverpaid, "eur")} paid above the cheapest current price in this period`
+              : "Items offered by more than one supplier"
+          }
+          table={
+            comparison.length
+              ? { head: ["Item", "Suppliers", "Cheapest", "Most expensive", "Spread", "Paid above cheapest"], rows: comparison.map((c) => [c.model, c.offers.length, fmt(c.cheapest, "eur"), fmt(c.dearest, "eur"), fmt(c.spread, "pct"), fmt(c.overpaid, "eur")]) }
+              : undefined
+          }
+        >
+          {comparison.length === 0 ? (
+            <p className="px-3 pb-4 text-sm text-muted">
+              No item has more than one supplier yet. Add suppliers on an item&apos;s page in the ERP to compare their prices here.
+            </p>
+          ) : (
+            <ul className="divide-y divide-line px-2 pb-2">
+              {comparison.slice(0, 10).map((c) => (
+                <li key={c.itemId} className="flex flex-wrap items-center justify-between gap-3 px-2 py-2.5 text-sm">
+                  <div className="min-w-0">
+                    <Link href={`/reporting/item/${c.itemId}`} className="block truncate font-semibold text-ink hover:text-brand">
+                      {c.model}
+                    </Link>
+                    <div className="truncate text-xs text-muted">
+                      {c.offers.map((o) => `${o.supplier_name.split(" ")[0]} ${fmt(o.unit_cost_eur, "eur")}`).join(" · ")}
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <div className="font-semibold tabular-nums text-ink">+{fmt(c.spread, "pct")} spread</div>
+                    <div className="text-xs text-muted">{c.overpaid ? `${fmt(c.overpaid, "eur")} above cheapest` : "always bought cheapest"}</div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </ChartCard>
         <ChartCard
           className="xl:col-span-2"

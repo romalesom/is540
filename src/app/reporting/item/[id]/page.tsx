@@ -26,7 +26,8 @@ export default async function ItemDrillThrough({ params, searchParams }: PagePro
   const p = totals(filterSales(ds, f, range.prevFrom, range.prevTo).filter((l) => l.item_id === id));
   const stock = stockOf(ds, id);
   const perDay = t.units / range.days;
-  const supplier = ds.suppliers.find((s) => s.supplier_id === item.supplier_id);
+  const offers = ds.offersByItem.get(id) ?? [];
+  const supplier = offers[0];
 
   const byMonth = groupBy(lines, (l) => l.month);
   const trend = range.months.map((m) => {
@@ -59,7 +60,7 @@ export default async function ItemDrillThrough({ params, searchParams }: PagePro
           <div className="mb-1 text-xs font-bold uppercase tracking-[0.12em] text-brand">Drill-through · {range.label}</div>
           <h1 className="text-[24px] font-bold leading-tight text-ink md:text-[28px]">{item.model}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted">
-            <span className="font-mono">{item.item_id}</span>·<span>{item.category}</span>·<span>{supplier?.supplier_name}</span>
+            <span className="font-mono">{item.item_id}</span>·<span>{item.category}</span>·<span>{offers.length > 1 ? `${offers.length} suppliers · cheapest ${supplier?.supplier_name}` : supplier?.supplier_name}</span>
             <StockBadge status={stockStatus(stock, item.reorder_point)} />
             {item.status === "Discontinued" && <span className="rounded-full bg-canvas px-2.5 py-1 text-xs font-semibold ring-1 ring-line">Discontinued</span>}
           </div>
@@ -75,7 +76,7 @@ export default async function ItemDrillThrough({ params, searchParams }: PagePro
         <Kpi label="Gross margin" value={t.margin} format="eur" hint={fmt(pct(t.margin, t.revenue), "pct")} />
         <Kpi label="Units sold" value={t.units} format="num" delta={delta(t.units, p.units, c)} />
         <Kpi label="In stock" value={stock} format="num" hint={`reorder point ${item.reorder_point}`} />
-        <Kpi label="Days of cover" value={perDay ? stock / perDay : 0} format="days" hint={`supplier lead time ${supplier?.lead_time_days ?? "–"} d`} />
+        <Kpi label="Days of cover" value={perDay ? stock / perDay : 0} format="days" hint={`cheapest supplier lead time ${supplier?.lead_time_days ?? "–"} d`} />
       </KpiRow>
 
       <div className="grid gap-4 xl:grid-cols-2">

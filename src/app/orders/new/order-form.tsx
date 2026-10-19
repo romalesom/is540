@@ -6,19 +6,17 @@ import { createPurchaseOrder } from "@/app/actions/orders";
 import { Field, FormError, SubmitButton, controlClass } from "@/components/forms";
 import { Icon } from "@/components/icon";
 import { StockBadge, eur, num } from "@/components/ui";
-import type { InventoryRow, Location, Supplier } from "@/lib/types";
+import type { InventoryRow, Location } from "@/lib/types";
 import { LIMITS } from "@/lib/validation";
 
 export function OrderForm({
   items,
   locations,
-  suppliers,
   preselected,
   today,
 }: {
   items: InventoryRow[];
   locations: Location[];
-  suppliers: Supplier[];
   preselected?: string;
   today: string;
 }) {
@@ -33,9 +31,12 @@ export function OrderForm({
   const [locationId, setLocationId] = useState(state.values?.location_id ?? defaultLocation(item));
   const [qty, setQty] = useState(state.values?.quantity ?? (item ? String(item.reorder_qty) : ""));
 
-  const supplier = suppliers.find((s) => s.supplier_id === item?.supplier_id);
+  // Suppliers arrive sorted cheapest first, so index 0 is the default choice.
+  const [supplierId, setSupplierId] = useState(state.values?.supplier_id ?? item?.suppliers[0]?.supplier_id ?? "");
+  const supplier = item?.suppliers.find((s) => s.supplier_id === supplierId);
+  const cheapest = item?.suppliers[0];
   const quantity = Number(qty);
-  const total = item && quantity > 0 ? quantity * item.unit_cost_eur : 0;
+  const total = supplier && quantity > 0 ? quantity * supplier.unit_cost_eur : 0;
   const expected = supplier
     ? new Date(Date.parse(today) + supplier.lead_time_days * 86_400_000).toISOString().slice(0, 10)
     : null;
@@ -46,6 +47,7 @@ export function OrderForm({
     setItemId(id);
     setLocationId(defaultLocation(next));
     setQty(next ? String(next.reorder_qty) : "");
+    setSupplierId(next?.suppliers[0]?.supplier_id ?? "");
   }
 
   return (
@@ -78,6 +80,55 @@ export function OrderForm({
                 Reorder point <b className="text-ink">{item.reorder_point}</b>
               </span>
             </div>
+          )}
+
+          {item && (
+            <fieldset>
+              <legend className="mb-1.5 text-sm font-semibold text-ink">Supplier</legend>
+              {item.suppliers.length === 0 ? (
+                <p className="rounded-control border border-brand/30 bg-brand-soft px-4 py-3 text-sm text-brand">
+                  No supplier is listed for this item. Add one on the item page first.
+                </p>
+              ) : (
+                <div className="grid gap-2">
+                  {item.suppliers.map((s, i) => {
+                    const selected = s.supplier_id === supplierId;
+                    const diff = cheapest ? s.unit_cost_eur - cheapest.unit_cost_eur : 0;
+                    return (
+                      <label
+                        key={s.supplier_id}
+                        className={`flex cursor-pointer items-center gap-3 rounded-control border px-4 py-3 text-sm transition-colors ${
+                          selected ? "border-brand bg-brand-soft/40" : "border-line hover:border-muted"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="supplier_id"
+                          value={s.supplier_id}
+                          checked={selected}
+                          onChange={() => setSupplierId(s.supplier_id)}
+                          className="accent-[#b61f29]"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-semibold text-ink">
+                            {s.supplier_name}
+                            {i === 0 && (
+                              <span className="ml-2 rounded-full bg-ok-soft px-2 py-0.5 text-[11px] font-semibold text-ok">Cheapest</span>
+                            )}
+                          </span>
+                          <span className="text-xs text-muted">{s.lead_time_days} days lead time</span>
+                        </span>
+                        <span className="shrink-0 text-right">
+                          <span className="block font-bold tabular-nums text-ink">{eur(s.unit_cost_eur)}</span>
+                          {diff > 0 && <span className="text-xs text-muted">+{eur(diff)} per unit</span>}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+              {e.supplier_id && <p className="mt-1.5 text-xs font-semibold text-brand">{e.supplier_id}</p>}
+            </fieldset>
           )}
 
           <div className="grid gap-5 md:grid-cols-2">
@@ -116,7 +167,7 @@ export function OrderForm({
         <h2 className="mb-4 font-bold text-ink">Order summary</h2>
         <dl className="space-y-3 text-sm">
           <Row label="Supplier" value={supplier?.supplier_name ?? "–"} />
-          <Row label="Unit cost" value={item ? eur(item.unit_cost_eur) : "–"} />
+          <Row label="Unit cost" value={supplier ? eur(supplier.unit_cost_eur) : "–"} hint={item && supplier && supplier.unit_cost_eur !== item.unit_cost_eur ? `standard cost ${eur(item.unit_cost_eur)}` : undefined} />
           <Row label="Quantity" value={quantity > 0 ? num(quantity) : "–"} />
           <Row label="Expected delivery" value={expected ?? "–"} hint={supplier ? `${supplier.lead_time_days} days lead time` : undefined} />
           <Row label="Stock incl. orders after this" value={item ? num(after) : "–"} />
@@ -125,7 +176,7 @@ export function OrderForm({
           <span className="text-sm font-semibold text-muted">Total</span>
           <span className="text-[26px] font-bold text-ink">{eur(total)}</span>
         </div>
-        <p className="mt-1 text-xs text-muted">Calculated from master data — price cannot be edited here.</p>
+        <p className="mt-1 text-xs text-muted">Calculated from the supplier&apos;s price — it cannot be edited here.</p>
         <div className="mt-6 flex flex-col gap-2">
           <SubmitButton icon="send">Place order</SubmitButton>
           <Link href="/orders" className="rounded-control px-4 py-2.5 text-center text-sm font-semibold text-muted hover:text-ink">

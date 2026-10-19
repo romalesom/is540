@@ -2,7 +2,6 @@ export type Item = {
   item_id: string;
   model: string;
   category: string;
-  supplier_id: string;
   tracking_mode: "Serialized" | "Quantity";
   unit_cost_eur: number;
   sale_price_eur: number;
@@ -26,9 +25,22 @@ export type Supplier = {
   contact: string | null;
 };
 
+// One supplier's offer for an item (item_suppliers). lead_time_days is the
+// effective value: the item-specific override or the supplier's default.
+export type SupplierOffer = {
+  supplier_id: string;
+  supplier_name: string;
+  unit_cost_eur: number;
+  lead_time_days: number;
+  lead_time_override: number | null;
+};
+
 export type StockStatus = "out" | "low" | "ok";
 
 export type InventoryRow = Item & {
+  /** Sorted cheapest first (ties: shorter lead time, then name). */
+  suppliers: SupplierOffer[];
+  /** Name of the cheapest supplier, for compact display. */
   supplier_name: string;
   stock_by_location: Record<string, number>;
   stock_qty: number;

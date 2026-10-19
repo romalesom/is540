@@ -6,8 +6,9 @@ import { ConfirmAction } from "@/components/forms";
 import { Icon } from "@/components/icon";
 import { Notice } from "@/components/notice";
 import { ButtonLink, Card, EmptyState, KpiTile, StockBadge, eur, num } from "@/components/ui";
-import { getInventoryRow, getItemActivity, getLocations } from "@/lib/data";
+import { getInventoryRow, getItemActivity, getLocations, getSuppliers } from "@/lib/data";
 import { getRole } from "@/lib/role";
+import { SupplierOffers } from "./supplier-offers";
 
 const ASSET_STATUS_LABEL: Record<string, string> = {
   InStock: "In stock",
@@ -19,10 +20,11 @@ const ASSET_STATUS_LABEL: Record<string, string> = {
 export default async function ItemDetailPage({ params, searchParams }: PageProps<"/inventory/[id]">) {
   const { id } = await params;
   const sp = await searchParams;
-  const [item, activity, locations, role] = await Promise.all([
+  const [item, activity, locations, suppliers, role] = await Promise.all([
     getInventoryRow(id),
     getItemActivity(id),
     getLocations(),
+    getSuppliers(),
     getRole(),
   ]);
   if (!item) notFound();
@@ -45,7 +47,8 @@ export default async function ItemDetailPage({ params, searchParams }: PageProps
           <div className="mb-1 font-mono text-xs font-bold tracking-wider text-brand">{item.item_id}</div>
           <h1 className="text-[28px] font-bold leading-tight text-ink">{item.model}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted">
-            <span>{item.category}</span>·<span>{item.supplier_name}</span>·
+            <span>{item.category}</span>·
+            <span>{item.suppliers.length > 1 ? `${item.suppliers.length} suppliers` : item.supplier_name}</span>·
             <span>{item.tracking_mode === "Serialized" ? "Serial-number tracked" : "Quantity tracked"}</span>
             {item.status === "Discontinued" ? (
               <span className="rounded-full bg-canvas px-2.5 py-1 text-xs font-semibold text-muted ring-1 ring-line">Discontinued</span>
@@ -109,7 +112,7 @@ export default async function ItemDetailPage({ params, searchParams }: PageProps
           tone={item.stock_status === "ok" ? "default" : "alert"}
         />
         <KpiTile label="On order" value={num(item.on_order_qty)} hint="Open purchase orders" icon="local_shipping" />
-        <KpiTile label="Stock value" value={eur(item.stock_value_eur)} hint={`${eur(item.unit_cost_eur)} unit cost`} icon="euro" />
+        <KpiTile label="Stock value" value={eur(item.stock_value_eur)} hint={`${eur(item.unit_cost_eur)} standard cost`} icon="euro" />
         <KpiTile
           label="Margin per unit"
           value={eur(unitMargin)}
@@ -117,6 +120,15 @@ export default async function ItemDetailPage({ params, searchParams }: PageProps
           icon="sell"
         />
       </div>
+
+      <SupplierOffers
+        itemId={item.item_id}
+        offers={item.suppliers}
+        allSuppliers={suppliers}
+        standardCost={item.unit_cost_eur}
+        salePrice={item.sale_price_eur}
+        isManager={isManager}
+      />
 
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <Section title="Stock by location" subtitle="Where the units are">
