@@ -52,15 +52,18 @@ export function KpiTile({
   hint,
   icon,
   tone = "default",
+  href,
 }: {
   label: string;
   value: string;
   hint?: string;
   icon: string;
   tone?: "default" | "alert";
+  /** Makes the whole tile a link, e.g. to the matching report. */
+  href?: string;
 }) {
-  return (
-    <Card className="p-4 md:p-5">
+  const tile = (
+    <Card className={`p-4 md:p-5 ${href ? "h-full transition-colors group-hover:border-muted" : ""}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="text-xs font-semibold text-muted md:text-sm">{label}</div>
         <div
@@ -75,7 +78,19 @@ export function KpiTile({
         {value}
       </div>
       {hint && <div className="mt-2 text-xs text-muted">{hint}</div>}
+      {href && (
+        <div className="mt-2 flex items-center gap-0.5 text-xs font-semibold text-brand">
+          Open report <Icon name="arrow_forward" className="!text-[14px] transition-transform group-hover:translate-x-0.5" />
+        </div>
+      )}
     </Card>
+  );
+  return href ? (
+    <Link href={href} className="group block rounded-card focus-visible:outline-2 focus-visible:outline-brand">
+      {tile}
+    </Link>
+  ) : (
+    tile
   );
 }
 

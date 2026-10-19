@@ -56,6 +56,7 @@ export default async function HomePage() {
           value={eur(sales.revenue)}
           hint={sales.until ? `Margin ${eur(sales.margin)} · until ${sales.until}` : "No orders yet"}
           icon="trending_up"
+          href="/reporting"
         />
       </div>
 
