@@ -8,6 +8,15 @@ export const eur = (n: number) =>
 
 export const num = (n: number) => new Intl.NumberFormat("en-GB").format(n);
 
+// Small gross line shown under a net price that has not been transacted yet.
+export function Gross({ net, vat, className = "" }: { net: number; vat: number; className?: string }) {
+  return (
+    <div className={`text-[11px] font-normal text-muted ${className}`}>
+      {eur(net * (1 + vat))} incl. {Number((vat * 100).toFixed(1))} % VAT
+    </div>
+  );
+}
+
 export function PageHeader({
   eyebrow,
   title,

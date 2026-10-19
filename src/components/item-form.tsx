@@ -17,9 +17,10 @@ type Props = {
   item?: Item;
   suggestedId?: string;
   cancelHref: string;
+  vatRate: number;
 };
 
-export function ItemForm({ action, suppliers, categories, item, suggestedId, cancelHref }: Props) {
+export function ItemForm({ action, suppliers, categories, item, suggestedId, cancelHref, vatRate }: Props) {
   const [state, formAction] = useActionState(action, {});
   const isNew = !item;
   const v = (name: keyof Item, fallback = "") => state.values?.[name] ?? (item ? String(item[name]) : fallback);
@@ -83,7 +84,7 @@ export function ItemForm({ action, suppliers, categories, item, suggestedId, can
         <Field label="Standard cost (€)" name="unit_cost_eur" error={e.unit_cost_eur} hint="Values stock and margin. Supplier prices are kept per supplier.">
           <input id="unit_cost_eur" name="unit_cost_eur" type="number" step="0.01" min={LIMITS.price.min} max={LIMITS.price.max} value={cost} onChange={(ev) => setCost(ev.target.value)} required className={controlClass(e.unit_cost_eur)} />
         </Field>
-        <Field label="Sale price (€)" name="sale_price_eur" error={e.sale_price_eur} hint={cost && price ? `Margin ${eur(margin)} per unit (${marginPct.toFixed(0)} %)` : "Must not be below the standard cost"}>
+        <Field label="Sale price (€)" name="sale_price_eur" error={e.sale_price_eur} hint={cost && price ? `${eur(Number(price) * (1 + vatRate))} incl. VAT · margin ${eur(margin)} per unit (${marginPct.toFixed(0)} %)` : "Net price. Must not be below the standard cost"}>
           <input id="sale_price_eur" name="sale_price_eur" type="number" step="0.01" min={LIMITS.price.min} max={LIMITS.price.max} value={price} onChange={(ev) => setPrice(ev.target.value)} required className={controlClass(e.sale_price_eur)} />
         </Field>
         <Field label="Reorder point" name="reorder_point" error={e.reorder_point} hint="A low-stock warning appears at or below this stock level.">

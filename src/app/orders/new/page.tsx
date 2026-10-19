@@ -1,12 +1,13 @@
 import { ManagerOnly, PageHeader } from "@/components/ui";
 import { getInventory, getLocations } from "@/lib/data";
 import { getRole } from "@/lib/role";
+import { getSettings } from "@/lib/settings";
 import { OrderForm } from "./order-form";
 
 export default async function NewOrderPage({ searchParams }: PageProps<"/orders/new">) {
   if ((await getRole()) !== "manager") return <ManagerOnly />;
   const sp = await searchParams;
-  const [inventory, locations] = await Promise.all([getInventory(), getLocations()]);
+  const [inventory, locations, settings] = await Promise.all([getInventory(), getLocations(), getSettings()]);
   // Items needing replenishment first, so the most urgent choice is on top.
   const items = inventory
     .filter((i) => i.status === "Active")
@@ -20,7 +21,7 @@ export default async function NewOrderPage({ searchParams }: PageProps<"/orders/
         title="New purchase order"
         description="Turn a low-stock item into an order. The cheapest supplier is preselected; price and delivery date follow the supplier you choose."
       />
-      <OrderForm items={items} locations={locations} preselected={preselected} today={new Date().toISOString().slice(0, 10)} />
+      <OrderForm items={items} locations={locations} preselected={preselected} today={new Date().toISOString().slice(0, 10)} vatRate={settings.vatRate} />
     </div>
   );
 }

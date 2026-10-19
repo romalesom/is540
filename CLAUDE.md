@@ -37,7 +37,9 @@ Prüfen mit `npx tsc --noEmit`, `npm run lint` und `npm run build`. Nach neuen R
 - **Lieferanten je Artikel** (n:m): in der Detailansicht hinzufügen, Preis und Lieferzeit ändern, entfernen (der letzte Lieferant ist nicht entfernbar); Seite `/suppliers` zeigt alle Lieferanten mit Artikeln und Preisen
 - **Remove:** nur bei Bestand 0 und ohne offene Bestellung; setzt immer den Status `Discontinued` (Soft Delete), nie hartes Löschen
 - **Purchase orders:** anlegen mit Lieferantenauswahl (günstigster vorausgewählt, bei Gleichstand kürzere Lieferzeit; Preis und Liefertermin vom gewählten Lieferanten); Receive (Maschinen → neue Assets, Zubehör → `inventory` +); Cancel
-- **Sales orders:** anlegen bucht sofort ab (Maschinen per FIFO auf `Sold`); Rabatt 0 / 5 / 10 %, bei Maschinen ab 3 Stück sind 5 % vorausgewählt (änderbar); Status Open → Shipped → Delivered; Cancel nur bei Open, mit Rückbuchung
+- **Sales orders:** anlegen bucht sofort ab (Maschinen per FIFO auf `Sold`); Rabattsätze und Staffel aus `/settings` (Standard: 5 % ab 3 Maschinen vorausgewählt, 10 % wählbar; änderbar); Status Open → Shipped → Delivered; Cancel nur bei Open, mit Rückbuchung
+- **Settings** (`/settings`, ändern nur Stock Manager): MwSt.-Satz und Rabattsätze mit optionaler Mindestmenge (Staffel, nur Maschinen, höchste erreichte Stufe gewinnt). Änderungen wirken nur auf neue Aufträge.
+- **Brutto-Anzeige:** Brutto = netto × (1 + MwSt.) wird nur angezeigt, nie gespeichert, und nur bei Preisen vor einer Transaktion: Verkaufspreis im Inventar und am Artikel, Lieferantenpreise, Artikelformular, Formulare für neue Sales/Purchase Orders. Bestehende Aufträge und das Reporting bleiben netto. Vereinfachung: ein Satz für alle Lieferanten (kein Reverse Charge, keine Einfuhrumsatzsteuer).
 - **Service monitor:** überfällig, kommende Termine, verkauft und nie gewartet; Record service (nächster Termin +180 Tage)
 
 **Reporting** (`/reporting`, eigenes Seitenmenü mit „Back to ERP“): Management summary, Inventory health, Profitability, Purchasing & suppliers (inkl. Preisvergleich über Lieferanten), After-sales & service sowie Drill-through `/reporting/item/[id]`. Jede Seite hat eigene Filter.
@@ -51,7 +53,8 @@ Kennzahlen und Formeln liegen zentral in [src/lib/reporting.ts](src/lib/reportin
 - `assets`: nur Maschinen; `status` InStock | InService | Sold | Scrapped; `order_id` verweist auf den Verkauf
 - `inventory`: nur Mengenartikel (Zubehör), je Artikel und Standort
 - `purchase_orders`: Status Ordered | Received | Cancelled
-- `sales_orders` (Kundenaufträge, bis 19.10.2026 `orders`): Status Open | Shipped | Delivered | Cancelled. Einkauf liegt in `purchase_orders`. `unit_price_eur` ist der **Nettopreis** nach Rabatt; `discount` (seit 19.10.2026) speichert den Rabatt als Dezimalbruch (0.05 = 5 %, erlaubt nur 0 / 0.05 / 0.10). Listenpreis zum Auftragszeitpunkt = `unit_price_eur / (1 − discount)`.
+- `sales_orders` (Kundenaufträge, bis 19.10.2026 `orders`): Status Open | Shipped | Delivered | Cancelled. Einkauf liegt in `purchase_orders`. `unit_price_eur` ist der **Nettopreis** nach Rabatt; `discount` (seit 19.10.2026) speichert den Rabatt als Dezimalbruch (0.05 = 5 %; DB prüft 0 ≤ discount < 1, die erlaubten Sätze prüft der Server gegen `discount_tiers`). Listenpreis zum Auftragszeitpunkt = `unit_price_eur / (1 − discount)`.
+- `app_settings` (genau eine Zeile, `id = 1`): `vat_rate` als Dezimalbruch (0.19). `discount_tiers`: `rate` (PK, Dezimalbruch), `min_qty` optional (leer → wählbar, nie vorausgewählt).
 - Weitere Tabellen: `service_history`, `suppliers`, `locations`, `customers`
 - Views:
   - `v_stock`: Bestand = InStock-Assets + `inventory`

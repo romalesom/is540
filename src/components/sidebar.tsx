@@ -16,6 +16,7 @@ const NAV = [
   { href: "/sales", label: "Sales orders", icon: "point_of_sale" },
   { href: "/service", label: "Service", icon: "build" },
   { href: "/reporting", label: "Reporting", icon: "monitoring" },
+  { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
 // Inside /reporting the sidebar switches to the report pages.

@@ -4,7 +4,7 @@ import { useActionState, useEffect, useId, useRef } from "react";
 import { addItemSupplier, removeItemSupplier, updateItemSupplier } from "@/app/actions/item-suppliers";
 import { ConfirmAction, Field, FormError, SubmitButton, controlClass } from "@/components/forms";
 import { Icon } from "@/components/icon";
-import { eur } from "@/components/ui";
+import { Gross, eur } from "@/components/ui";
 import type { Supplier, SupplierOffer } from "@/lib/types";
 import { LIMITS, type FormState } from "@/lib/validation";
 
@@ -14,6 +14,7 @@ export function SupplierOffers({
   allSuppliers,
   standardCost,
   salePrice,
+  vatRate,
   isManager,
 }: {
   itemId: string;
@@ -21,6 +22,7 @@ export function SupplierOffers({
   allSuppliers: Supplier[];
   standardCost: number;
   salePrice: number;
+  vatRate: number;
   isManager: boolean;
 }) {
   const cheapest = offers[0];
@@ -73,6 +75,7 @@ export function SupplierOffers({
                 </div>
                 <div className="text-right">
                   <div className="font-bold tabular-nums text-ink">{eur(o.unit_cost_eur)}</div>
+                  <Gross net={o.unit_cost_eur} vat={vatRate} />
                   <div className="text-xs text-muted">
                     margin {eur(margin)} · {salePrice ? ((margin / salePrice) * 100).toFixed(0) : 0} %
                   </div>

@@ -19,3 +19,6 @@ export function fmt(v: number, f: Format, compact = false) {
       return new Intl.NumberFormat("en-GB", { notation: compact ? "compact" : "standard", maximumFractionDigits: 1 }).format(v);
   }
 }
+
+// Gross prices are display-only and never stored.
+export const gross = (net: number, vatRate: number) => net * (1 + vatRate);

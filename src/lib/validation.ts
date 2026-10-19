@@ -15,17 +15,27 @@ export const LIMITS = {
   orderQty: { min: 1, max: 500 },
 };
 
-// Discounts are stored as decimal fractions (0.05 = 5 %) in sales_orders.discount,
-// whose check constraint allows exactly these steps.
-export const DISCOUNTS = [0, 0.05, 0.1] as const;
+// Discounts are decimal fractions (0.05 = 5 %), stored per order in
+// sales_orders.discount. The offered rates come from discount_tiers (/settings).
+export type DiscountTier = { rate: number; min_qty: number | null };
 
-// Rule found in the sales data: machines ordered 3 or more at a time get 5 %.
-// The sales form preselects it; the manager can still change it.
-export function suggestedDiscount(trackingMode: string | undefined, quantity: number): number {
-  return trackingMode === "Serialized" && quantity >= 3 ? 0.05 : 0;
+export const discountOptions = (tiers: DiscountTier[]) => [0, ...tiers.map((t) => t.rate)];
+
+// Volume rule, as in the sales data (5 % for 3+ machines): the highest tier
+// whose minimum quantity is reached is preselected for machines. The manager
+// can still pick another rate.
+export function suggestedTier(tiers: DiscountTier[], trackingMode: string | undefined, quantity: number): DiscountTier | undefined {
+  if (trackingMode !== "Serialized") return undefined;
+  return tiers
+    .filter((t) => t.min_qty != null && quantity >= t.min_qty)
+    .sort((a, b) => b.rate - a.rate)[0];
 }
 
-export const discountLabel = (d: number) => (d ? `${Math.round(d * 100)} %` : "No discount");
+export const pctLabel = (d: number) => `${Number((d * 100).toFixed(1))} %`;
+export const discountLabel = (d: number) => (d ? pctLabel(d) : "No discount");
+
+export const DISCOUNT_LIMITS = { rate: { min: 0.1, max: 50 }, minQty: { min: 1, max: 500 }, maxTiers: 10 };
+export const VAT_LIMITS = { min: 0, max: 50 };
 
 export class Fields {
   errors: Record<string, string> = {};

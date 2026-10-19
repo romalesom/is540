@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { getInventory, getLocations } from "@/lib/data";
 import { getRole } from "@/lib/role";
+import { getSettings } from "@/lib/settings";
 import type { InventoryRow } from "@/lib/types";
 import { Icon } from "@/components/icon";
-import { ButtonLink, Card, EmptyState, PageHeader, STATUS_LABEL, StockBadge, eur, num } from "@/components/ui";
+import { ButtonLink, Card, EmptyState, PageHeader, STATUS_LABEL, StockBadge, Gross, eur, num } from "@/components/ui";
 import { InventoryFilters } from "./filters";
 
 const SORTS = {
@@ -27,7 +28,7 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
   const sort: SortKey = str("sort") in SORTS ? (str("sort") as SortKey) : "item_id";
   const dir = str("dir") === "desc" ? "desc" : "asc";
 
-  const [inventory, locations, role] = await Promise.all([getInventory(), getLocations(), getRole()]);
+  const [inventory, locations, role, { vatRate }] = await Promise.all([getInventory(), getLocations(), getRole(), getSettings()]);
   const categories = [...new Set(inventory.map((i) => i.category))].sort();
 
   // With a location filter, stock figures refer to that location only.
@@ -158,7 +159,10 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
                     <td className="px-4 py-3">
                       <StockBadge status={r.stock_status} />
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums">{eur(r.sale_price_eur)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {eur(r.sale_price_eur)}
+                      <Gross net={r.sale_price_eur} vat={vatRate} />
+                    </td>
                     <td className="px-4 py-3 text-right tabular-nums">{eur(r.stock_value_eur)}</td>
                     <td className="px-2 py-3 text-muted">
                       <Link href={`/inventory/${r.item_id}`} aria-label={`Open ${r.model}`}>

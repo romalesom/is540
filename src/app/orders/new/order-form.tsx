@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useActionState, useState, type ReactNode } from "react";
 import { createPurchaseOrder } from "@/app/actions/orders";
 import { Field, FormError, SubmitButton, controlClass } from "@/components/forms";
 import { Icon } from "@/components/icon";
-import { StockBadge, eur, num } from "@/components/ui";
+import { Gross, StockBadge, eur, num } from "@/components/ui";
 import type { InventoryRow, Location } from "@/lib/types";
 import { LIMITS } from "@/lib/validation";
 
@@ -14,11 +14,13 @@ export function OrderForm({
   locations,
   preselected,
   today,
+  vatRate,
 }: {
   items: InventoryRow[];
   locations: Location[];
   preselected?: string;
   today: string;
+  vatRate: number;
 }) {
   const [state, formAction] = useActionState(createPurchaseOrder, {});
   const e = state.errors ?? {};
@@ -120,6 +122,7 @@ export function OrderForm({
                         </span>
                         <span className="shrink-0 text-right">
                           <span className="block font-bold tabular-nums text-ink">{eur(s.unit_cost_eur)}</span>
+                          <Gross net={s.unit_cost_eur} vat={vatRate} />
                           {diff > 0 && <span className="text-xs text-muted">+{eur(diff)} per unit</span>}
                         </span>
                       </label>
@@ -167,16 +170,17 @@ export function OrderForm({
         <h2 className="mb-4 font-bold text-ink">Order summary</h2>
         <dl className="space-y-3 text-sm">
           <Row label="Supplier" value={supplier?.supplier_name ?? "–"} />
-          <Row label="Unit cost" value={supplier ? eur(supplier.unit_cost_eur) : "–"} hint={item && supplier && supplier.unit_cost_eur !== item.unit_cost_eur ? `standard cost ${eur(item.unit_cost_eur)}` : undefined} />
+          <Row label="Unit cost" value={supplier ? eur(supplier.unit_cost_eur) : "–"} gross={supplier ? <Gross net={supplier.unit_cost_eur} vat={vatRate} /> : undefined} hint={item && supplier && supplier.unit_cost_eur !== item.unit_cost_eur ? `standard cost ${eur(item.unit_cost_eur)}` : undefined} />
           <Row label="Quantity" value={quantity > 0 ? num(quantity) : "–"} />
           <Row label="Expected delivery" value={expected ?? "–"} hint={supplier ? `${supplier.lead_time_days} days lead time` : undefined} />
           <Row label="Stock incl. orders after this" value={item ? num(after) : "–"} />
         </dl>
         <div className="mt-5 flex items-baseline justify-between border-t border-line pt-4">
-          <span className="text-sm font-semibold text-muted">Total</span>
+          <span className="text-sm font-semibold text-muted">Total (net)</span>
           <span className="text-[26px] font-bold text-ink">{eur(total)}</span>
         </div>
-        <p className="mt-1 text-xs text-muted">Calculated from the supplier&apos;s price — it cannot be edited here.</p>
+        <Gross net={total} vat={vatRate} className="text-right !text-xs" />
+        <p className="mt-1 text-xs text-muted">Calculated from the supplier&apos;s price — it cannot be edited here. Only the net price is stored.</p>
         <div className="mt-6 flex flex-col gap-2">
           <SubmitButton icon="send">Place order</SubmitButton>
           <Link href="/orders" className="rounded-control px-4 py-2.5 text-center text-sm font-semibold text-muted hover:text-ink">
@@ -193,12 +197,13 @@ export function OrderForm({
   );
 }
 
-function Row({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Row({ label, value, hint, gross }: { label: string; value: string; hint?: string; gross?: ReactNode }) {
   return (
     <div className="flex justify-between gap-4">
       <dt className="text-muted">{label}</dt>
       <dd className="text-right font-semibold text-ink">
         {value}
+        {gross}
         {hint && <div className="text-xs font-normal text-muted">{hint}</div>}
       </dd>
     </div>

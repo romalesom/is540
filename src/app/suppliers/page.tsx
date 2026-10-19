@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { Icon } from "@/components/icon";
-import { Card, EmptyState, PageHeader, eur, num } from "@/components/ui";
+import { Card, EmptyState, Gross, PageHeader, eur, num } from "@/components/ui";
 import { getInventory, getSuppliers } from "@/lib/data";
 import { loadDataset, pct } from "@/lib/reporting";
+import { getSettings } from "@/lib/settings";
 
 export default async function SuppliersPage() {
-  const [suppliers, inventory, ds] = await Promise.all([getSuppliers(), getInventory(), loadDataset()]);
+  const [suppliers, inventory, ds, { vatRate }] = await Promise.all([getSuppliers(), getInventory(), loadDataset(), getSettings()]);
 
   const cards = suppliers.map((s) => {
     const items = inventory
@@ -75,6 +76,7 @@ export default async function SuppliersPage() {
                         </div>
                         <div className="shrink-0 text-right">
                           <div className="font-bold tabular-nums text-ink">{eur(offer!.unit_cost_eur)}</div>
+                          <Gross net={offer!.unit_cost_eur} vat={vatRate} />
                           {item.suppliers.length > 1 && (
                             <div className={`text-[11px] font-semibold ${cheapest ? "text-ok" : "text-muted"}`}>{cheapest ? "cheapest" : `cheapest ${eur(item.suppliers[0].unit_cost_eur)}`}</div>
                           )}

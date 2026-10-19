@@ -7,7 +7,9 @@ import { Icon } from "@/components/icon";
 import { Notice } from "@/components/notice";
 import { ButtonLink, Card, EmptyState, KpiTile, StockBadge, eur, num } from "@/components/ui";
 import { getInventoryRow, getItemActivity, getLocations, getSuppliers } from "@/lib/data";
+import { gross } from "@/lib/format";
 import { getRole } from "@/lib/role";
+import { getSettings } from "@/lib/settings";
 import { SupplierOffers } from "./supplier-offers";
 
 const ASSET_STATUS_LABEL: Record<string, string> = {
@@ -20,12 +22,13 @@ const ASSET_STATUS_LABEL: Record<string, string> = {
 export default async function ItemDetailPage({ params, searchParams }: PageProps<"/inventory/[id]">) {
   const { id } = await params;
   const sp = await searchParams;
-  const [item, activity, locations, suppliers, role] = await Promise.all([
+  const [item, activity, locations, suppliers, role, settings] = await Promise.all([
     getInventoryRow(id),
     getItemActivity(id),
     getLocations(),
     getSuppliers(),
     getRole(),
+    getSettings(),
   ]);
   if (!item) notFound();
 
@@ -116,7 +119,7 @@ export default async function ItemDetailPage({ params, searchParams }: PageProps
         <KpiTile
           label="Margin per unit"
           value={eur(unitMargin)}
-          hint={`${((unitMargin / item.sale_price_eur) * 100).toFixed(0)} % of ${eur(item.sale_price_eur)}`}
+          hint={`${((unitMargin / item.sale_price_eur) * 100).toFixed(0)} % of ${eur(item.sale_price_eur)} sale price (${eur(gross(item.sale_price_eur, settings.vatRate))} incl. VAT)`}
           icon="sell"
         />
       </div>
@@ -127,6 +130,7 @@ export default async function ItemDetailPage({ params, searchParams }: PageProps
         allSuppliers={suppliers}
         standardCost={item.unit_cost_eur}
         salePrice={item.sale_price_eur}
+        vatRate={settings.vatRate}
         isManager={isManager}
       />
 

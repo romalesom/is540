@@ -6,7 +6,8 @@ import { db } from "@/lib/supabase";
 import { getCustomers, getLocations, type SalesOrder } from "@/lib/data";
 import { requireManager } from "@/lib/role";
 import type { Item } from "@/lib/types";
-import { DISCOUNTS, Fields, LIMITS, type FormState } from "@/lib/validation";
+import { getSettings } from "@/lib/settings";
+import { Fields, LIMITS, discountOptions, type FormState } from "@/lib/validation";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -37,12 +38,13 @@ async function availableAt(item: Item, locationId: string): Promise<number> {
 export async function createSalesOrder(_prev: FormState, form: FormData): Promise<FormState> {
   await requireManager();
   const f = new Fields(form);
-  const [customers, locations] = await Promise.all([getCustomers(), getLocations()]);
+  const [customers, locations, settings] = await Promise.all([getCustomers(), getLocations(), getSettings()]);
   const customerId = f.oneOf("customer_id", "Customer", customers.map((c) => c.customer_id));
   const itemId = f.text("item_id", "Item");
   const locationId = f.oneOf("location_id", "Location", locations.map((l) => l.location_id));
   const quantity = f.number("quantity", "Quantity", { ...LIMITS.orderQty, integer: true });
-  const discount = Number(f.oneOf("discount", "Discount", DISCOUNTS.map(String)));
+  // Only the rates configured on /settings are accepted.
+  const discount = Number(f.oneOf("discount", "Discount", discountOptions(settings.tiers).map(String)));
 
   const client = db();
   const { data: item } = itemId
