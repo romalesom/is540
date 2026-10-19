@@ -15,7 +15,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 async function nextOrderId() {
   for (const digits of [6, 5, 4]) {
     const { data } = await db()
-      .from("orders")
+      .from("sales_orders")
       .select("order_id")
       .like("order_id", `ORD-${"_".repeat(digits)}`)
       .order("order_id", { ascending: false })
@@ -63,7 +63,7 @@ export async function createSalesOrder(_prev: FormState, form: FormData): Promis
   // The unit price is derived from the list price and discount, never typed in.
   const unitPrice = Math.round(Number(item.sale_price_eur) * (1 - discount / 100) * 100) / 100;
   const orderId = await nextOrderId();
-  const { error } = await client.from("orders").insert({
+  const { error } = await client.from("sales_orders").insert({
     order_id: orderId,
     order_date: today(),
     customer_id: customerId,
@@ -78,7 +78,7 @@ export async function createSalesOrder(_prev: FormState, form: FormData): Promis
   // Stock leaves the shelf as soon as the order exists, as in the historic data.
   const booked = await bookOut(item, locationId, quantity, orderId);
   if (!booked.ok) {
-    await client.from("orders").delete().eq("order_id", orderId);
+    await client.from("sales_orders").delete().eq("order_id", orderId);
     return { ok: false, message: booked.message, values: f.values };
   }
 
@@ -125,7 +125,7 @@ async function bookOut(item: Item, locationId: string, quantity: number, orderId
 }
 
 async function loadOrder(id: string): Promise<SalesOrder> {
-  const { data } = await db().from("orders").select("*").eq("order_id", id).maybeSingle<SalesOrder>();
+  const { data } = await db().from("sales_orders").select("*").eq("order_id", id).maybeSingle<SalesOrder>();
   if (!data) throw new Error(`Sales order ${id} not found.`);
   return data;
 }
@@ -141,7 +141,7 @@ export async function advanceSalesOrder(id: string): Promise<void> {
   const next = NEXT_STATUS[order.order_status];
   if (!next) throw new Error(`Sales order ${id} is already ${order.order_status.toLowerCase()}.`);
   const { error } = await db()
-    .from("orders")
+    .from("sales_orders")
     .update({ order_status: next })
     .eq("order_id", id)
     .eq("order_status", order.order_status);
@@ -184,7 +184,7 @@ export async function cancelSalesOrder(id: string): Promise<void> {
     if (error) throw new Error(`Stock could not be returned: ${error.message}`);
   }
 
-  const { error } = await client.from("orders").update({ order_status: "Cancelled" }).eq("order_id", id);
+  const { error } = await client.from("sales_orders").update({ order_status: "Cancelled" }).eq("order_id", id);
   if (error) throw new Error(`Stock was returned, but the order status could not be updated: ${error.message}`);
   revalidatePath("/", "layout");
   redirect(`/sales?status=Cancelled&notice=sale-cancelled&id=${id}`);

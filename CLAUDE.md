@@ -49,12 +49,12 @@ Kennzahlen und Formeln liegen zentral in [src/lib/reporting.ts](src/lib/reportin
 - `assets`: nur Maschinen; `status` InStock | InService | Sold | Scrapped; `order_id` verweist auf den Verkauf
 - `inventory`: nur Mengenartikel (Zubehör), je Artikel und Standort
 - `purchase_orders`: Status Ordered | Received | Cancelled
-- `orders`: Status Open | Shipped | Delivered | Cancelled
+- `sales_orders` (Kundenaufträge, bis 19.10.2026 `orders`): Status Open | Shipped | Delivered | Cancelled. Einkauf liegt in `purchase_orders`.
 - Weitere Tabellen: `service_history`, `suppliers`, `locations`, `customers`
 - Views:
   - `v_stock`: Bestand = InStock-Assets + `inventory`
   - `v_order_margin`: Marge = Anschaffungskosten der verknüpften Assets, sonst Menge × Artikelkosten
-  - `stock_movements`: Migration in `supabase/migrations/`; Zugang = erhaltene Einkaufsbestellungen, Abgang = nicht stornierte Aufträge
+  - `stock_movements`: Migration in `supabase/migrations/`; Zugang = erhaltene Einkaufsbestellungen, Abgang = nicht stornierte `sales_orders`
 - ID-Schemata:
   - Artikel `MCH-###`, Einkauf `PO-YYMMDD-<Artikelnr>[-n]`, Verkauf `ORD-<n>`
   - Assets `AST-#####`, Seriennummern `SN-<Artikelnr>-####`, Services `SVC-####`
@@ -74,7 +74,7 @@ Kennzahlen und Formeln liegen zentral in [src/lib/reporting.ts](src/lib/reportin
    begin;
    delete from service_history where service_id > 'SVC-0052';
    delete from assets          where asset_id   > 'AST-01791';
-   delete from orders          where order_date > '2026-09-30';
+   delete from sales_orders    where order_date > '2026-09-30';
    delete from inventory       where item_id    > 'MCH-032';
    delete from purchase_orders where order_date > '2026-09-30';
    delete from items           where item_id    > 'MCH-032';

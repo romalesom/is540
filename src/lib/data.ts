@@ -77,7 +77,7 @@ export async function getInventory(): Promise<InventoryRow[]> {
 export async function getRecentSales(): Promise<{ revenue: number; margin: number; until: string | null }> {
   const client = db();
   const latest = check<{ order_date: string }[]>(
-    await client.from("orders").select("order_date").order("order_date", { ascending: false }).limit(1),
+    await client.from("sales_orders").select("order_date").order("order_date", { ascending: false }).limit(1),
     "latest order",
   );
   if (latest.length === 0) return { revenue: 0, margin: 0, until: null };
@@ -238,7 +238,7 @@ export async function getCustomers(): Promise<Customer[]> {
 export async function getSalesOrders(status?: string): Promise<SalesOrder[]> {
   // order_id is ORD-<n>; sorting by date then ID keeps the newest on top.
   let query = db()
-    .from("orders")
+    .from("sales_orders")
     .select("*")
     .order("order_date", { ascending: false })
     .order("order_id", { ascending: false })
@@ -251,7 +251,7 @@ export async function countSalesOrders(): Promise<Record<string, number>> {
   const client = db();
   const statuses = ["Open", "Shipped", "Delivered", "Cancelled"] as const;
   const results = await Promise.all(
-    statuses.map((s) => client.from("orders").select("*", { count: "exact", head: true }).eq("order_status", s)),
+    statuses.map((s) => client.from("sales_orders").select("*", { count: "exact", head: true }).eq("order_status", s)),
   );
   return Object.fromEntries(statuses.map((s, i) => [s, results[i].count ?? 0]));
 }
@@ -280,11 +280,11 @@ type AssetWithSale = {
   status: string;
   location_id: string | null;
   items: { model: string };
-  orders: { order_date: string; customers: { customer_name: string; city: string | null } } | null;
+  sales_orders: { order_date: string; customers: { customer_name: string; city: string | null } } | null;
 };
 
 const ASSET_WITH_SALE =
-  "asset_id, serial_number, item_id, status, location_id, items(model), orders(order_date, customers(customer_name, city))";
+  "asset_id, serial_number, item_id, status, location_id, items(model), sales_orders(order_date, customers(customer_name, city))";
 
 // Every machine's latest service record, which carries its next due date.
 export async function getServiceSchedule(): Promise<ServiceDue[]> {
@@ -313,8 +313,8 @@ export async function getServiceSchedule(): Promise<ServiceDue[]> {
         model: a.items.model,
         asset_status: a.status,
         location_id: a.location_id,
-        customer_name: a.orders?.customers.customer_name ?? null,
-        customer_city: a.orders?.customers.city ?? null,
+        customer_name: a.sales_orders?.customers.customer_name ?? null,
+        customer_city: a.sales_orders?.customers.city ?? null,
         last_service_date: s.service_date,
         last_service_type: s.service_type,
         last_outcome: s.outcome,
@@ -352,7 +352,7 @@ export async function getNeverServiced({
   const base = () => {
     let query = client
       .from("assets")
-      .select(ASSET_WITH_SALE.replace("orders(", "orders!inner("), { count: "exact" })
+      .select(ASSET_WITH_SALE.replace("sales_orders(", "sales_orders!inner("), { count: "exact" })
       .eq("status", "Sold");
     if (servicedIds.length) query = query.not("asset_id", "in", excluded);
     if (q) query = query.ilike("serial_number", `%${q}%`);
@@ -362,10 +362,10 @@ export async function getNeverServiced({
   const cutoff = new Date(Date.now() - SERVICE_INTERVAL_DAYS * 86_400_000).toISOString().slice(0, 10);
   const [pageRes, overdueRes] = await Promise.all([
     base()
-      .order("orders(order_date)", { ascending: true })
+      .order("sales_orders(order_date)", { ascending: true })
       .order("asset_id", { ascending: true })
       .range(page * pageSize, page * pageSize + pageSize - 1),
-    base().lte("orders.order_date", cutoff).range(0, 0),
+    base().lte("sales_orders.order_date", cutoff).range(0, 0),
   ]);
   const rows = check<AssetWithSale[]>(pageRes, "unserviced machines");
   return {
@@ -374,9 +374,9 @@ export async function getNeverServiced({
       serial_number: a.serial_number,
       item_id: a.item_id,
       model: a.items.model,
-      sold_on: a.orders!.order_date,
-      customer_name: a.orders!.customers.customer_name,
-      customer_city: a.orders!.customers.city,
+      sold_on: a.sales_orders!.order_date,
+      customer_name: a.sales_orders!.customers.customer_name,
+      customer_city: a.sales_orders!.customers.city,
     })),
     total: pageRes.count ?? 0,
     overdueFirstService: overdueRes.count ?? 0,
