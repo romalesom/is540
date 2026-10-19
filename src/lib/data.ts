@@ -129,6 +129,14 @@ export async function getRecentSales(): Promise<{ revenue: number; margin: numbe
   };
 }
 
+// Active items at or below their reorder point, most critical first
+// (lowest stock relative to the reorder point).
+export function lowStockAlerts(inventory: InventoryRow[]): InventoryRow[] {
+  return inventory
+    .filter((i) => i.status === "Active" && i.stock_status !== "ok")
+    .sort((a, b) => a.stock_qty / Math.max(a.reorder_point, 1) - b.stock_qty / Math.max(b.reorder_point, 1));
+}
+
 export async function getSuppliers(): Promise<Supplier[]> {
   return check(await db().from("suppliers").select("*").order("supplier_name"), "suppliers");
 }
