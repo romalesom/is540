@@ -59,7 +59,7 @@ export default async function ManagementSummary({ searchParams }: PageProps<"/re
         <Kpi label="Revenue" value={t.revenue} format="eur" delta={delta(t.revenue, p.revenue, c)} hint={c ? "vs previous period" : undefined} />
         <Kpi label="Gross margin" value={t.margin} format="eur" delta={delta(t.margin, p.margin, c)} hint={c ? "vs previous period" : undefined} />
         <Kpi label="Margin %" value={pct(t.margin, t.revenue)} format="pct" delta={delta(pct(t.margin, t.revenue), pct(p.margin, p.revenue), c)} />
-        <Kpi label="Units sold" value={t.units} format="num" delta={delta(t.units, p.units, c)} hint={`${fmt(t.orders, "num")} orders`} />
+        <Kpi label="Units sold" value={t.units} format="num" delta={delta(t.units, p.units, c)} hint={`${fmt(t.orders, "num")} orders${t.returnedUnits ? ` · net of ${fmt(t.returnedUnits, "num")} returned` : ""}`} />
         <Kpi label="Inventory value" value={inventoryValue(ds, f)} format="eur" hint="current stock × unit cost" />
       </KpiRow>
 
@@ -67,7 +67,7 @@ export default async function ManagementSummary({ searchParams }: PageProps<"/re
         <ChartCard
           className="xl:col-span-2"
           title={singleMonth ? `Revenue and margin per day · ${range.label}` : "Revenue and margin per month"}
-          subtitle="Non-cancelled sales orders"
+          subtitle="Non-cancelled sales orders, net of returns"
           hint={singleMonth ? undefined : "Click a month to drill down"}
           table={{ head: [singleMonth ? "Day" : "Month", "Revenue", "Margin"], rows: trend.map((r) => [r.x, fmt(r.revenue, "eur"), fmt(r.margin, "eur")]) }}
         >

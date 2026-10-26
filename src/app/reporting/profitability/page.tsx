@@ -59,7 +59,14 @@ export default async function Profitability({ searchParams }: PageProps<"/report
           delta={delta(pct(t.discountAmount, t.listRevenue), pct(p.discountAmount, p.listRevenue), c)}
           hint={`${fmt(t.discountAmount, "eur")} given away · ${fmt(pct(t.discountedOrders, t.orders), "pct")} of orders`}
         />
-        <Kpi label="Avg selling price" value={t.units ? t.revenue / t.units : 0} format="eur" hint="revenue ÷ units" />
+        <Kpi
+          label="Return rate"
+          value={pct(t.returnedUnits, t.units + t.returnedUnits)}
+          format="pct"
+          upIsGood={false}
+          delta={delta(pct(t.returnedUnits, t.units + t.returnedUnits), pct(p.returnedUnits, p.units + p.returnedUnits), c)}
+          hint={`${fmt(t.returnedUnits, "num")} units · ${fmt(t.refunds, "eur")} credited`}
+        />
         <Kpi label="Margin per order" value={t.orders ? t.margin / t.orders : 0} format="eur" hint={`${fmt(t.orders, "num")} orders`} />
       </KpiRow>
 

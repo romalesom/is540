@@ -103,6 +103,7 @@ export const ORDER_STATUS_STYLE: Record<string, string> = {
   Shipped: "bg-[#e8f0fb] text-[#005eb8]",
   Received: "bg-ok-soft text-ok",
   Delivered: "bg-ok-soft text-ok",
+  Returned: "bg-[#f3e8f8] text-[#7a3e9d]",
   Cancelled: "bg-canvas text-muted ring-1 ring-line",
 };
 

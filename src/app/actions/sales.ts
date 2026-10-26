@@ -192,3 +192,34 @@ export async function cancelSalesOrder(id: string): Promise<void> {
   revalidatePath("/", "layout");
   redirect(`/sales?status=Cancelled&notice=sale-cancelled&id=${id}`);
 }
+
+// Returns are booked by the database function create_sales_return in one
+// transaction (refund, stock or scrap, order status). See the migration
+// 20261026_sales_returns.sql for the rules it enforces.
+export async function returnSalesOrder(orderId: string, _prev: FormState, form: FormData): Promise<FormState> {
+  await requireManager();
+  const f = new Fields(form);
+  const locations = await getLocations();
+  const disposition = f.oneOf("disposition", "Condition", ["Resellable", "Defective"] as const);
+  const locationId = f.oneOf("location_id", "Location", locations.map((l) => l.location_id));
+  const reason = f.text("reason", "Reason", { required: false, max: 200 });
+  const assetIds = form.getAll("asset_id").map(String);
+  // Machines are returned by serial number, accessories by quantity.
+  const serialized = form.get("serialized") === "1";
+  const quantity = serialized ? assetIds.length : f.number("quantity", "Quantity", { ...LIMITS.orderQty, integer: true });
+  if (serialized && assetIds.length === 0) f.errors.asset_id = "Choose at least one machine.";
+  if (!f.valid) return f.fail();
+
+  const { data, error } = await db().rpc("create_sales_return", {
+    p_order_id: orderId,
+    p_quantity: quantity,
+    p_asset_ids: assetIds,
+    p_disposition: disposition,
+    p_location_id: locationId,
+    p_reason: reason,
+  });
+  if (error) return { ok: false, message: error.message, values: f.values };
+
+  revalidatePath("/", "layout");
+  redirect(`/sales?status=all&notice=returned&id=${data}`);
+}

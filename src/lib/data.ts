@@ -114,17 +114,18 @@ export async function getRecentSales(): Promise<{ revenue: number; margin: numbe
   if (latest.length === 0) return { revenue: 0, margin: 0, until: null };
   const until = latest[0].order_date;
   const since = new Date(Date.parse(until) - 29 * 86_400_000).toISOString().slice(0, 10);
-  const rows = check<{ line_total_eur: number; margin_eur: number }[]>(
-    await client
-      .from("v_order_margin")
-      .select("line_total_eur, margin_eur")
-      .gte("order_date", since)
-      .lte("order_date", until),
-    "revenue",
-  );
+  const [orderRes, returnRes] = await Promise.all([
+    client.from("v_order_margin").select("line_total_eur, margin_eur").gte("order_date", since).lte("order_date", until),
+    client.from("sales_returns").select("refund_eur, cost_eur, disposition").gte("return_date", since).lte("return_date", until),
+  ]);
+  const rows = check<{ line_total_eur: number; margin_eur: number }[]>(orderRes, "revenue");
+  // Returns reduce revenue in the month they happen, as in reporting.
+  const returns = check<{ refund_eur: number; cost_eur: number; disposition: string }[]>(returnRes, "returns");
+  const refunds = returns.reduce((sum, r) => sum + Number(r.refund_eur), 0);
+  const costBack = returns.reduce((sum, r) => sum + (r.disposition === "Resellable" ? Number(r.cost_eur) : 0), 0);
   return {
-    revenue: rows.reduce((sum, r) => sum + Number(r.line_total_eur), 0),
-    margin: rows.reduce((sum, r) => sum + Number(r.margin_eur), 0),
+    revenue: rows.reduce((sum, r) => sum + Number(r.line_total_eur), 0) - refunds,
+    margin: rows.reduce((sum, r) => sum + Number(r.margin_eur), 0) - refunds + costBack,
     until,
   };
 }
@@ -284,8 +285,44 @@ export type SalesOrder = {
   unit_price_eur: number;
   /** Decimal fraction, e.g. 0.05 = 5 %. */
   discount: number;
-  order_status: "Open" | "Shipped" | "Delivered" | "Cancelled";
+  order_status: "Open" | "Shipped" | "Delivered" | "Returned" | "Cancelled";
 };
+
+export type SalesReturn = {
+  return_id: string;
+  order_id: string;
+  return_date: string;
+  quantity: number;
+  disposition: "Resellable" | "Defective";
+  location_id: string;
+  reason: string | null;
+  refund_eur: number;
+  cost_eur: number;
+};
+
+/**
+ * What the sales list needs to offer returns: units already returned per order
+ * and the machines still sold under each order (to pick serial numbers).
+ */
+export async function getReturnContext(orderIds: string[]) {
+  const returned = new Map<string, number>();
+  const soldAssets = new Map<string, { asset_id: string; serial_number: string }[]>();
+  if (orderIds.length === 0) return { returned, soldAssets };
+  const client = db();
+  const [returns, assets] = await Promise.all([
+    client.from("sales_returns").select("order_id, quantity").in("order_id", orderIds),
+    client.from("assets").select("asset_id, serial_number, order_id").in("order_id", orderIds).eq("status", "Sold").order("serial_number"),
+  ]);
+  for (const r of check<{ order_id: string; quantity: number }[]>(returns, "returns")) {
+    returned.set(r.order_id, (returned.get(r.order_id) ?? 0) + r.quantity);
+  }
+  for (const a of check<{ asset_id: string; serial_number: string; order_id: string }[]>(assets, "sold machines")) {
+    const list = soldAssets.get(a.order_id) ?? [];
+    list.push({ asset_id: a.asset_id, serial_number: a.serial_number });
+    soldAssets.set(a.order_id, list);
+  }
+  return { returned, soldAssets };
+}
 
 export async function getCustomers(): Promise<Customer[]> {
   return check(await db().from("customers").select("*").order("customer_name"), "customers");
@@ -305,7 +342,7 @@ export async function getSalesOrders(status?: string, limit = 200): Promise<Sale
 
 export async function countSalesOrders(): Promise<Record<string, number>> {
   const client = db();
-  const statuses = ["Open", "Shipped", "Delivered", "Cancelled"] as const;
+  const statuses = ["Open", "Shipped", "Delivered", "Returned", "Cancelled"] as const;
   const results = await Promise.all(
     statuses.map((s) => client.from("sales_orders").select("*", { count: "exact", head: true }).eq("order_status", s)),
   );

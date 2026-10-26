@@ -2,7 +2,7 @@ import "server-only";
 import type { Dataset } from "@/lib/reporting";
 
 export function filterOptions(ds: Dataset) {
-  const months = [...new Set(ds.sales.map((s) => s.month))].sort().reverse();
+  const months = [...new Set(ds.sales.filter((s) => s.kind === "sale").map((s) => s.month))].sort().reverse();
   return {
     months,
     categories: [...new Set(ds.items.map((i) => i.category))].sort().map((c) => ({ value: c, label: c })),

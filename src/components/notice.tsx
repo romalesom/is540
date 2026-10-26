@@ -13,6 +13,7 @@ const MESSAGES: Record<string, { text: (id?: string) => string; tone: "ok" | "wa
   shipped: { text: (id) => `Sales order ${id ?? ""} marked as shipped.`, tone: "ok" },
   delivered: { text: (id) => `Sales order ${id ?? ""} marked as delivered.`, tone: "ok" },
   "sale-cancelled": { text: (id) => `Sales order ${id ?? ""} cancelled. The goods are back in stock.`, tone: "ok" },
+  returned: { text: (id) => `Return ${id ?? ""} booked. Resellable goods are back in stock, defective ones are written off.`, tone: "ok" },
 };
 
 export function Notice({ code, id }: { code?: string; id?: string }) {

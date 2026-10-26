@@ -4,14 +4,16 @@ import { ConfirmAction } from "@/components/forms";
 import { Icon } from "@/components/icon";
 import { Notice } from "@/components/notice";
 import { ButtonLink, Card, EmptyState, ORDER_STATUS_STYLE, PageHeader, eur, num } from "@/components/ui";
-import { countSalesOrders, getCustomers, getInventory, getLocations, getSalesOrders } from "@/lib/data";
+import { countSalesOrders, getCustomers, getInventory, getLocations, getReturnContext, getSalesOrders, type SalesOrder } from "@/lib/data";
 import { fmt } from "@/lib/format";
 import { getRole } from "@/lib/role";
+import { ReturnDialog } from "./return-dialog";
 
 const TABS = [
   { value: "Open", label: "Open" },
   { value: "Shipped", label: "Shipped" },
   { value: "Delivered", label: "Delivered" },
+  { value: "Returned", label: "Returned" },
   { value: "Cancelled", label: "Cancelled" },
   { value: "all", label: "All" },
 ] as const;
@@ -38,7 +40,30 @@ export default async function SalesPage({ searchParams }: PageProps<"/sales">) {
   const locationName = new Map(locations.map((l) => [l.location_id, l.location_name]));
   const customerName = new Map(customers.map((c) => [c.customer_id, c.customer_name]));
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
-  const showActions = isManager && (tab === "Open" || tab === "Shipped");
+  const showActions = isManager && tab !== "Cancelled" && tab !== "Returned";
+  const { returned, soldAssets } = await getReturnContext(orders.map((o) => o.order_id));
+
+  // Shipped or delivered orders with units left can be returned.
+  const returnAction = (o: SalesOrder) => {
+    const openQty = o.quantity - (returned.get(o.order_id) ?? 0);
+    const item = itemById.get(o.item_id);
+    if (!isManager || !item || openQty <= 0 || (o.order_status !== "Shipped" && o.order_status !== "Delivered")) return null;
+    return (
+      <ReturnDialog
+        orderId={o.order_id}
+        model={item.model}
+        unitPrice={Number(o.unit_price_eur)}
+        openQty={openQty}
+        serials={item.tracking_mode === "Serialized" ? (soldAssets.get(o.order_id) ?? []) : undefined}
+        locations={locations}
+        defaultLocation={o.location_id}
+      />
+    );
+  };
+  const returnedNote = (o: SalesOrder) => {
+    const n = returned.get(o.order_id) ?? 0;
+    return n > 0 && o.order_status !== "Returned" ? <div className="text-xs font-semibold text-[#7a3e9d]">{num(n)} returned</div> : null;
+  };
 
   return (
     <>
@@ -110,8 +135,9 @@ export default async function SalesPage({ searchParams }: PageProps<"/sales">) {
                       <span className="truncate text-muted">{locationName.get(o.location_id)}</span>
                       <span className="text-right text-muted">{margin != null ? `margin ${eur(margin)}` : ""}</span>
                     </div>
-                    {isManager && (next || o.order_status === "Open") && (
-                      <div className="mt-3 flex gap-2">
+                    {returnedNote(o)}
+                    {isManager && (next || o.order_status === "Open" || returnAction(o)) && (
+                      <div className="mt-3 flex flex-wrap gap-2">
                         {next && (
                           <ConfirmAction
                             action={advanceSalesOrder.bind(null, o.order_id)}
@@ -134,6 +160,7 @@ export default async function SalesPage({ searchParams }: PageProps<"/sales">) {
                             confirmLabel="Cancel order"
                           />
                         )}
+                        {returnAction(o)}
                       </div>
                     )}
                   </li>
@@ -174,7 +201,10 @@ export default async function SalesPage({ searchParams }: PageProps<"/sales">) {
                         </Link>
                         <div className="text-xs text-muted">{locationName.get(o.location_id)}</div>
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums">{num(o.quantity)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">
+                        {num(o.quantity)}
+                        {returnedNote(o)}
+                      </td>
                       <td className="px-4 py-3 text-right tabular-nums">
                         <div className="font-semibold text-ink">{eur(lineTotal)}</div>
                         {discount > 0 && <div className="text-xs text-muted">{fmt(discount, "pct")} discount</div>}
@@ -210,6 +240,7 @@ export default async function SalesPage({ searchParams }: PageProps<"/sales">) {
                                 confirmLabel="Cancel order"
                               />
                             )}
+                            {returnAction(o)}
                           </div>
                         </td>
                       )}
