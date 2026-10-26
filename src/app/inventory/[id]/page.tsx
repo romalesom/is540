@@ -14,6 +14,7 @@ import { SupplierOffers } from "./supplier-offers";
 
 const ASSET_STATUS_LABEL: Record<string, string> = {
   InStock: "In stock",
+  InTransit: "In transit",
   InService: "In service",
   Sold: "Sold",
   Scrapped: "Scrapped",
@@ -72,9 +73,14 @@ export default async function ItemDetailPage({ params, searchParams }: PageProps
                   <Icon name="add_shopping_cart" /> Reorder
                 </ButtonLink>
                 {item.stock_qty > 0 && (
-                  <ButtonLink href={`/sales/new?item=${item.item_id}`} variant="secondary">
-                    <Icon name="point_of_sale" /> Sell
-                  </ButtonLink>
+                  <>
+                    <ButtonLink href={`/sales/new?item=${item.item_id}`} variant="secondary">
+                      <Icon name="point_of_sale" /> Sell
+                    </ButtonLink>
+                    <ButtonLink href={`/transfers/new?item=${item.item_id}`} variant="secondary">
+                      <Icon name="swap_horiz" /> Transfer
+                    </ButtonLink>
+                  </>
                 )}
                 <ButtonLink href={`/inventory/${item.item_id}/edit`} variant="secondary">
                   <Icon name="edit" /> Edit
@@ -110,7 +116,7 @@ export default async function ItemDetailPage({ params, searchParams }: PageProps
         <KpiTile
           label="In stock"
           value={num(item.stock_qty)}
-          hint={`Reorder point ${item.reorder_point} · reorder qty ${item.reorder_qty}`}
+          hint={`${item.in_transit_qty ? `+${num(item.in_transit_qty)} in transit · ` : ""}reorder point ${item.reorder_point} · reorder qty ${item.reorder_qty}`}
           icon="inventory_2"
           tone={item.stock_status === "ok" ? "default" : "alert"}
         />

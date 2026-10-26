@@ -23,7 +23,8 @@ import type { Customer, Item, Location, Supplier } from "./types";
  *                    revenue − refund; COGS − cost of the goods only if they were resellable
  *                    (defective returns are written off, so their cost stays as a loss).
  *                    Units are net of returns; Return rate = returned units / units sold gross
- *   Inventory value  current stock (v_stock) × item unit cost — a snapshot, not period-dependent
+ *   Inventory value  (current stock (v_stock) + units in transit) × item unit cost — a snapshot;
+ *                    with a location filter, transit is left out (it belongs to no location)
  *   Stock turnover   annualised COGS of the period / inventory value
  *   Days of cover    current stock / average units sold per day in the period
  *   On-time delivery received purchase orders with received_date ≤ expected_date / all received
@@ -64,6 +65,7 @@ const PK: Record<string, string> = {
   service_history: "service_id",
   sales_returns: "return_id",
   sales_return_assets: "asset_id",
+  v_in_transit: "item_id",
   v_stock: "item_id",
   item_suppliers: "item_id",
 };
@@ -132,7 +134,7 @@ export type SaleLine = {
 
 // Loaded once per request, shared by every report on the page.
 export const loadDataset = cache(async () => {
-  const [items, suppliers, links, locations, customers, orders, pos, assets, services, stock, returns, returnAssets] = await Promise.all([
+  const [items, suppliers, links, locations, customers, orders, pos, assets, services, stock, returns, returnAssets, transit] = await Promise.all([
     fetchAll<Item>("items", "*"),
     fetchAll<Supplier>("suppliers", "*"),
     fetchAll<ItemSupplierRow>("item_suppliers", "*"),
@@ -145,6 +147,7 @@ export const loadDataset = cache(async () => {
     fetchAll<{ item_id: string; location_id: string; stock_qty: number }>("v_stock", "*"),
     fetchAll<ReturnRow>("sales_returns", "*"),
     fetchAll<{ return_id: string; asset_id: string }>("sales_return_assets", "*"),
+    fetchAll<{ item_id: string; quantity: number }>("v_in_transit", "*"),
   ]);
 
   const itemById = new Map(items.map((i) => [i.item_id, { ...i, unit_cost_eur: Number(i.unit_cost_eur), sale_price_eur: Number(i.sale_price_eur) }]));
@@ -238,6 +241,7 @@ export const loadDataset = cache(async () => {
     assets,
     services,
     stockByItem,
+    inTransitByItem: new Map(transit.map((t) => [t.item_id, t.quantity])),
     offersByItem: groupOffers(suppliers, links),
     latestSale,
     earliestSale,
@@ -396,6 +400,10 @@ export function delta(current: number, previous: number, comparable = true): num
   return (current - previous) / Math.abs(previous);
 }
 
+// Goods in transit belong to no location, so they count only without a location filter.
 export function inventoryValue(ds: Dataset, f: Filters) {
-  return itemsInScope(ds, f).reduce((s, i) => s + stockOf(ds, i.item_id, f.location || undefined) * i.unit_cost_eur, 0);
+  return itemsInScope(ds, f).reduce(
+    (s, i) => s + (stockOf(ds, i.item_id, f.location || undefined) + (f.location ? 0 : (ds.inTransitByItem.get(i.item_id) ?? 0))) * i.unit_cost_eur,
+    0,
+  );
 }

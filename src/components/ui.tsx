@@ -99,6 +99,7 @@ export function KpiTile({
 // Status pills for purchase orders (Ordered/Received) and sales orders (Open/Shipped/Delivered).
 export const ORDER_STATUS_STYLE: Record<string, string> = {
   Ordered: "bg-amber-soft text-[#8a5a00]",
+  InTransit: "bg-[#e8f0fb] text-[#005eb8]",
   Open: "bg-amber-soft text-[#8a5a00]",
   Shipped: "bg-[#e8f0fb] text-[#005eb8]",
   Received: "bg-ok-soft text-ok",

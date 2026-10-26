@@ -34,6 +34,7 @@ export default async function HomePage() {
   const alerts = lowStockAlerts(inventory);
   const stockValue = inventory.reduce((s, i) => s + i.stock_value_eur, 0);
   const units = inventory.reduce((s, i) => s + i.stock_qty, 0);
+  const transit = inventory.reduce((s, i) => s + i.in_transit_qty, 0);
 
   const valueByLocation = locations
     .map((l) => ({
@@ -57,8 +58,13 @@ export default async function HomePage() {
       />
 
       <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
-        <KpiTile label="Inventory value" value={eur(stockValue)} hint="Stock × unit cost" icon="euro" />
-        <KpiTile label="Units in stock" value={num(units)} hint={`${active.length} active items`} icon="inventory_2" />
+        <KpiTile label="Inventory value" value={eur(stockValue)} hint="Stock incl. transit × unit cost" icon="euro" />
+        <KpiTile
+          label="Units in stock"
+          value={num(units)}
+          hint={`${active.length} active items${transit ? ` · ${num(transit)} in transit` : ""}`}
+          icon="inventory_2"
+        />
         <KpiTile
           label="Below reorder point"
           value={num(alerts.length)}

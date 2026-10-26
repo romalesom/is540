@@ -117,6 +117,7 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
                     </div>
                     <div className="shrink-0 text-right">
                       <div className="text-lg font-bold tabular-nums leading-tight text-ink">{num(r.stock_qty)}</div>
+                      {r.in_transit_qty > 0 && <div className="text-[11px] text-[#005eb8]">+{num(r.in_transit_qty)} in transit</div>}
                       <div className="text-[11px] text-muted">min {r.reorder_point}</div>
                     </div>
                     <Icon name="chevron_right" className="shrink-0 text-muted" />
@@ -154,7 +155,10 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
                       </div>
                     </td>
                     <td className="px-4 py-3 text-body">{r.category}</td>
-                    <td className="px-4 py-3 text-right font-semibold tabular-nums text-ink">{num(r.stock_qty)}</td>
+                    <td className="px-4 py-3 text-right font-semibold tabular-nums text-ink">
+                      {num(r.stock_qty)}
+                      {r.in_transit_qty > 0 && <div className="text-[11px] font-normal text-[#005eb8]">+{num(r.in_transit_qty)} in transit</div>}
+                    </td>
                     <td className="px-4 py-3 text-right tabular-nums text-muted">{r.reorder_point}</td>
                     <td className="px-4 py-3">
                       <StockBadge status={r.stock_status} />

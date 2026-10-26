@@ -45,6 +45,9 @@ export type InventoryRow = Item & {
   stock_by_location: Record<string, number>;
   stock_qty: number;
   on_order_qty: number;
+  /** Units on the way between two own locations: valued, but not available. */
+  in_transit_qty: number;
+  /** (stock_qty + in_transit_qty) × standard cost. */
   stock_value_eur: number;
   stock_status: StockStatus;
 };

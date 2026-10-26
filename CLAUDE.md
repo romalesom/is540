@@ -39,6 +39,7 @@ Prüfen mit `npx tsc --noEmit`, `npm run lint` und `npm run build`. Nach neuen R
 - **Remove:** nur bei Bestand 0 und ohne offene Bestellung; setzt immer den Status `Discontinued` (Soft Delete), nie hartes Löschen
 - **Purchase orders:** anlegen mit Lieferantenauswahl (günstigster vorausgewählt, bei Gleichstand kürzere Lieferzeit; Preis und Liefertermin vom gewählten Lieferanten); Receive (Maschinen → neue Assets, Zubehör → `inventory` +); Cancel
 - **Sales orders:** anlegen bucht sofort ab (Maschinen per FIFO auf `Sold`); Rabattsätze und Staffel aus `/settings` (Standard: 5 % ab 3 Maschinen vorausgewählt, 10 % wählbar; änderbar); Status Open → Shipped → Delivered; Cancel nur bei Open, mit Rückbuchung; **Return** bei Shipped/Delivered (Teilmengen möglich, Maschinen per Seriennummer): „Resellable“ → zurück ins gewählte Lager (Maschinen als `Used`), „Defective“ → verschrottet; bei vollständiger Rückgabe Status `Returned`
+- **Transfers** (`/transfers`): Umlagerung zwischen Standorten mit Status InTransit → Received (oder Cancelled → zurück zur Quelle). Maschinen verlassen die Quelle per FIFO (Status `InTransit`, ohne Standort). Unterwegs-Ware zählt zum Bestandswert, ist aber nirgends verfügbar; Inventar, Artikelseite und Home zeigen „in transit“. „Transfer“-Button auf der Artikelseite.
 - **Settings** (`/settings`, ändern nur Stock Manager): MwSt.-Satz und Rabattsätze mit optionaler Mindestmenge (Staffel, nur Maschinen, höchste erreichte Stufe gewinnt). Änderungen wirken nur auf neue Aufträge.
 - **Brutto-Anzeige:** Brutto = netto × (1 + MwSt.) wird nur angezeigt, nie gespeichert, und nur bei Preisen vor einer Transaktion: Verkaufspreis im Inventar und am Artikel, Lieferantenpreise, Artikelformular, Formulare für neue Sales/Purchase Orders. Bestehende Aufträge und das Reporting bleiben netto. Vereinfachung: ein Satz für alle Lieferanten (kein Reverse Charge, keine Einfuhrumsatzsteuer).
 - **Service monitor:** überfällig, kommende Termine, verkauft und nie gewartet; Record service (nächster Termin +180 Tage)
@@ -57,12 +58,13 @@ Kennzahlen und Formeln liegen zentral in [src/lib/reporting.ts](src/lib/reportin
 - `sales_orders` (Kundenaufträge, bis 19.10.2026 `orders`): Status Open | Shipped | Delivered | Returned | Cancelled. Einkauf liegt in `purchase_orders`. `unit_price_eur` ist der **Nettopreis** nach Rabatt; `discount` (seit 19.10.2026) speichert den Rabatt als Dezimalbruch (0.05 = 5 %; DB prüft 0 ≤ discount < 1, die erlaubten Sätze prüft der Server gegen `discount_tiers`). Listenpreis zum Auftragszeitpunkt = `unit_price_eur / (1 − discount)`.
 - `sales_returns` (`RET-####`): Retouren mit Menge, `disposition` Resellable | Defective, Ziel-/Annahmestandort, `refund_eur` (= Menge × Netto-Stückpreis), `cost_eur` (Anschaffungskosten der Ware). `sales_return_assets` verknüpft die zurückgegebenen Maschinen dauerhaft, weil `assets.order_id` bei Rücknahme geleert und bei Wiederverkauf neu gesetzt wird. Gebucht nur über `create_sales_return(...)`.
 - **Reporting und Retouren:** negative Zeilen im Monat der Retoure (wie eine Gutschrift). Umsatz − Erstattung, COGS − Kosten nur bei Resellable (defekte Ware bleibt als Verlust). Stückzahlen netto; Kennzahl Return rate auf Profitability.
+- `stock_transfers` (`TRF-####`): Artikel, von/nach, Menge, Status InTransit | Received | Cancelled, Versand-/Eingangsdatum. `stock_transfer_assets` verknüpft die Maschinen. Gebucht nur über `create_stock_transfer`, `receive_stock_transfer`, `cancel_stock_transfer`. View `v_in_transit`: Menge unterwegs je Artikel. Asset-Status jetzt InStock | InTransit | InService | Sold | Scrapped.
 - `app_settings` (genau eine Zeile, `id = 1`): `vat_rate` als Dezimalbruch (0.19). `discount_tiers`: `rate` (PK, Dezimalbruch), `min_qty` optional (leer → wählbar, nie vorausgewählt).
 - Weitere Tabellen: `service_history`, `suppliers`, `locations`, `customers`
 - Views:
   - `v_stock`: Bestand = InStock-Assets + `inventory`
   - `v_order_margin`: Marge = Anschaffungskosten der verknüpften Assets (inkl. über `sales_return_assets` zurückgegebener), sonst Menge × Artikelkosten
-  - `stock_movements`: Migration in `supabase/migrations/`; Zugang = erhaltene Einkaufsbestellungen, Abgang = nicht stornierte `sales_orders`, Zugang = Retouren mit Resellable
+  - `stock_movements`: Migration in `supabase/migrations/`; Zugang = erhaltene Einkaufsbestellungen, Abgang = nicht stornierte `sales_orders`, Zugang = Retouren mit Resellable, Umlagerung = „Transfer out“ beim Versand und „Transfer in“ beim Eingang (stornierte fehlen)
 - ID-Schemata:
   - Artikel `MCH-###`, Einkauf `PO-YYMMDD-<Artikelnr>[-n]`, Verkauf `ORD-<n>`
   - Assets `AST-#####`, Seriennummern `SN-<Artikelnr>-####`, Services `SVC-####`
@@ -83,6 +85,9 @@ Kennzahlen und Formeln liegen zentral in [src/lib/reporting.ts](src/lib/reportin
    -- Retouren auf Testaufträge (z. B. RET-0001 vom 26.10.2026 auf ORD-7596) zuerst
    delete from sales_return_assets where return_id in (select return_id from sales_returns where order_id in (select order_id from sales_orders where order_date > '2026-09-30'));
    delete from sales_returns   where order_id in (select order_id from sales_orders where order_date > '2026-09-30');
+   -- Test-Umlagerungen TRF-0001 bis TRF-0003 vom 26.10.2026 (alle auf MCH-034)
+   delete from stock_transfer_assets where transfer_id in (select transfer_id from stock_transfers where item_id > 'MCH-032');
+   delete from stock_transfers where item_id > 'MCH-032';
    delete from service_history where service_id > 'SVC-0052';
    delete from assets          where asset_id   > 'AST-01791';
    delete from sales_orders    where order_date > '2026-09-30';

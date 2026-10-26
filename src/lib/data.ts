@@ -56,13 +56,15 @@ export function groupOffers(suppliers: Supplier[], links: ItemSupplierRow[]) {
 // serialized machines are counted as InStock assets, accessories come from inventory.
 export async function getInventory(): Promise<InventoryRow[]> {
   const client = db();
-  const [items, suppliers, links, stock, openPos] = await Promise.all([
+  const [items, suppliers, links, stock, openPos, transit] = await Promise.all([
     client.from("items").select("*").order("item_id"),
     client.from("suppliers").select("*"),
     client.from("item_suppliers").select("*"),
     client.from("v_stock").select("*"),
     client.from("purchase_orders").select("item_id, quantity").eq("status", "Ordered"),
+    client.from("v_in_transit").select("*"),
   ]);
+  const inTransit = new Map(check<{ item_id: string; quantity: number }[]>(transit, "stock in transit").map((t) => [t.item_id, t.quantity]));
 
   const itemRows = check<Item[]>(items, "items");
   const supplierRows = check<Supplier[]>(suppliers, "suppliers");
@@ -97,7 +99,8 @@ export async function getInventory(): Promise<InventoryRow[]> {
       stock_by_location: stockByLocation,
       stock_qty: stockQty,
       on_order_qty: onOrder.get(item.item_id) ?? 0,
-      stock_value_eur: stockQty * Number(item.unit_cost_eur),
+      in_transit_qty: inTransit.get(item.item_id) ?? 0,
+      stock_value_eur: (stockQty + (inTransit.get(item.item_id) ?? 0)) * Number(item.unit_cost_eur),
       stock_status: stockStatus(stockQty, item.reorder_point),
     };
   });
@@ -197,7 +200,7 @@ export async function getItemActivity(itemId: string) {
       .from("assets")
       .select("asset_id, serial_number, location_id, condition, status, received_date, acquisition_cost_eur")
       .eq("item_id", itemId)
-      .in("status", ["InStock", "InService"])
+      .in("status", ["InStock", "InTransit", "InService"])
       .order("received_date", { ascending: false })
       .limit(100),
     client.from("assets").select("status").eq("item_id", itemId),
@@ -263,6 +266,30 @@ export async function getIncomingPurchaseOrders(limit = 5): Promise<PurchaseOrde
       .limit(limit),
     "incoming purchase orders",
   );
+}
+
+export type StockTransfer = {
+  transfer_id: string;
+  item_id: string;
+  from_location_id: string;
+  to_location_id: string;
+  quantity: number;
+  status: "InTransit" | "Received" | "Cancelled";
+  shipped_date: string;
+  received_date: string | null;
+};
+
+export async function getTransfers(status?: string): Promise<StockTransfer[]> {
+  let query = db().from("stock_transfers").select("*").order("shipped_date", { ascending: false }).order("transfer_id", { ascending: false }).limit(200);
+  if (status) query = query.eq("status", status);
+  return check(await query, "transfers");
+}
+
+export async function countTransfers(): Promise<Record<string, number>> {
+  const client = db();
+  const statuses = ["InTransit", "Received", "Cancelled"] as const;
+  const results = await Promise.all(statuses.map((s) => client.from("stock_transfers").select("*", { count: "exact", head: true }).eq("status", s)));
+  return Object.fromEntries(statuses.map((s, i) => [s, results[i].count ?? 0]));
 }
 
 export async function countPurchaseOrders(): Promise<Record<string, number>> {
