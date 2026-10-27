@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChartCard, ParetoChart } from "@/components/charts";
+import { BarList, ChartCard, ParetoChart } from "@/components/charts";
 import { StockBadge } from "@/components/ui";
 import { stockStatus } from "@/lib/data";
 import { fmt } from "@/lib/format";
@@ -11,6 +11,12 @@ import { Decision, Kpi, KpiRow, ReportHeader } from "../ui";
 // Sequential blue ramp (light → dark) for the stock heatmap.
 const RAMP = ["#f3f8fe", "#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95"];
 const SLOW_DAYS = 180;
+
+function groupByKey<T>(list: T[], key: (t: T) => string) {
+  const map = new Map<string, T[]>();
+  for (const t of list) map.set(key(t), [...(map.get(key(t)) ?? []), t]);
+  return map;
+}
 
 export default async function InventoryHealth({ searchParams }: PageProps<"/reporting/inventory">) {
   const f = parseFilters(await searchParams);
@@ -39,6 +45,27 @@ export default async function InventoryHealth({ searchParams }: PageProps<"/repo
     });
 
   const invValue = rows.reduce((s, r) => s + r.value, 0);
+  // Goods in transit belong to no location, so they only count without a location filter.
+  const transitUnits = loc ? 0 : rows.reduce((s, r) => s + (ds.inTransitByItem.get(r.item_id) ?? 0), 0);
+  const transitValue = loc ? 0 : rows.reduce((s, r) => s + (ds.inTransitByItem.get(r.item_id) ?? 0) * r.unit_cost_eur, 0);
+
+  // Write-offs: stock adjustments in the period (missing in a count, scrapped).
+  const inScope = new Map(rows.map((r) => [r.item_id, r]));
+  const adjustments = ds.adjustments.filter(
+    (a) => a.adjustment_date >= range.from && a.adjustment_date <= range.to && (!loc || a.location_id === loc) && inScope.has(a.item_id),
+  );
+  const writeOffs = adjustments.filter((a) => a.value_eur < 0);
+  const writeOffValue = -writeOffs.reduce((s, a) => s + a.value_eur, 0);
+  const foundValue = adjustments.filter((a) => a.value_eur > 0).reduce((s, a) => s + a.value_eur, 0);
+  const writeOffByItem = [...groupByKey(writeOffs, (a) => a.item_id)]
+    .map(([k, v]) => ({
+      key: k,
+      label: inScope.get(k)?.model ?? k,
+      value: -v.reduce((s, a) => s + a.value_eur, 0),
+      sub: `${fmt(-v.reduce((s, a) => s + a.quantity, 0), "num")} unit${v.reduce((s, a) => s + a.quantity, 0) === -1 ? "" : "s"} · ${[...new Set(v.map((a) => a.reason.toLowerCase()))].join(", ")}`,
+      href: `/inventory/${k}`,
+    }))
+    .sort((a, b) => b.value - a.value);
   const cogsAnnual = (rows.reduce((s, r) => s + r.cogs, 0) / range.days) * 365;
   const totalPerDay = rows.reduce((s, r) => s + r.unitsSold, 0) / range.days;
   const totalStock = rows.reduce((s, r) => s + r.stock, 0);
@@ -73,7 +100,12 @@ export default async function InventoryHealth({ searchParams }: PageProps<"/repo
       <ReportFilters periods={PERIODS.map((x) => ({ value: x.value, label: x.label }))} months={opts.months} categories={opts.categories} locations={opts.locations} />
 
       <KpiRow>
-        <Kpi label="Inventory value" value={invValue} format="eur" hint={`${fmt(totalStock, "num")} units on hand`} />
+        <Kpi
+          label="Inventory value"
+          value={invValue + transitValue}
+          format="eur"
+          hint={`${fmt(totalStock, "num")} units on hand${transitUnits ? ` · ${fmt(transitUnits, "num")} in transit` : ""}`}
+        />
         <Kpi label="Below reorder point" value={below.length} format="num" hint={`${below.filter((b) => b.status === "out").length} out of stock`} />
         <Kpi label="Stock turnover" value={invValue ? cogsAnnual / invValue : 0} format="num" hint="× per year (COGS / stock value)" />
         <Kpi label="Days of cover" value={totalPerDay ? totalStock / totalPerDay : 0} format="days" hint="stock ÷ units sold per day" />
@@ -200,6 +232,18 @@ export default async function InventoryHealth({ searchParams }: PageProps<"/repo
               </tbody>
             </table>
           </div>
+        </ChartCard>
+        <ChartCard
+          className="xl:col-span-2"
+          title="Write-offs by item"
+          subtitle={`Missing in stock counts and scrapped, at cost · ${fmt(writeOffValue, "eur")} in the period${foundValue ? ` · ${fmt(foundValue, "eur")} found again` : ""}`}
+          table={{ head: ["Item", "Write-off", "Detail"], rows: writeOffByItem.map((r) => [r.label, fmt(r.value, "eur"), r.sub]) }}
+        >
+          {writeOffByItem.length === 0 ? (
+            <p className="px-5 pb-5 text-sm text-muted">No write-offs in this period.</p>
+          ) : (
+            <BarList data={writeOffByItem} format="eur" />
+          )}
         </ChartCard>
       </div>
 

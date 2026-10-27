@@ -200,7 +200,7 @@ export async function getItemActivity(itemId: string) {
       .from("assets")
       .select("asset_id, serial_number, location_id, condition, status, received_date, acquisition_cost_eur")
       .eq("item_id", itemId)
-      .in("status", ["InStock", "InTransit", "InService"])
+      .in("status", ["InStock", "InTransit", "InService", "Missing"])
       .order("received_date", { ascending: false })
       .limit(100),
     client.from("assets").select("status").eq("item_id", itemId),
@@ -290,6 +290,77 @@ export async function countTransfers(): Promise<Record<string, number>> {
   const statuses = ["InTransit", "Received", "Cancelled"] as const;
   const results = await Promise.all(statuses.map((s) => client.from("stock_transfers").select("*", { count: "exact", head: true }).eq("status", s)));
   return Object.fromEntries(statuses.map((s, i) => [s, results[i].count ?? 0]));
+}
+
+export type CountSheet = {
+  /** Machines expected on the shelf, grouped by item. */
+  machines: { item_id: string; model: string; assets: { asset_id: string; serial_number: string }[] }[];
+  /** Machines booked as missing at this location in an earlier count. */
+  missing: { asset_id: string; serial_number: string; item_id: string; model: string }[];
+  /** Active accessories with their book quantity here (0 if none). */
+  accessories: { item_id: string; model: string; book: number }[];
+};
+
+export async function getCountSheet(locationId: string): Promise<CountSheet> {
+  const client = db();
+  const [items, assets, inv] = await Promise.all([
+    client.from("items").select("item_id, model, tracking_mode, status").order("item_id"),
+    client
+      .from("assets")
+      .select("asset_id, serial_number, item_id, status")
+      .eq("location_id", locationId)
+      .in("status", ["InStock", "Missing"])
+      .order("serial_number"),
+    client.from("inventory").select("item_id, stock_qty").eq("location_id", locationId),
+  ]);
+  const itemRows = check<{ item_id: string; model: string; tracking_mode: string; status: string }[]>(items, "items");
+  const model = new Map(itemRows.map((i) => [i.item_id, i.model]));
+  const assetRows = check<{ asset_id: string; serial_number: string; item_id: string; status: string }[]>(assets, "machines");
+  const book = new Map(check<{ item_id: string; stock_qty: number }[]>(inv, "inventory").map((r) => [r.item_id, r.stock_qty]));
+
+  const grouped = new Map<string, { asset_id: string; serial_number: string }[]>();
+  for (const a of assetRows.filter((a) => a.status === "InStock")) {
+    grouped.set(a.item_id, [...(grouped.get(a.item_id) ?? []), { asset_id: a.asset_id, serial_number: a.serial_number }]);
+  }
+  return {
+    machines: [...grouped].sort(([a], [b]) => a.localeCompare(b)).map(([item_id, list]) => ({ item_id, model: model.get(item_id) ?? item_id, assets: list })),
+    missing: assetRows
+      .filter((a) => a.status === "Missing")
+      .map((a) => ({ asset_id: a.asset_id, serial_number: a.serial_number, item_id: a.item_id, model: model.get(a.item_id) ?? a.item_id })),
+    accessories: itemRows
+      .filter((i) => i.tracking_mode === "Quantity" && (i.status === "Active" || (book.get(i.item_id) ?? 0) > 0))
+      .map((i) => ({ item_id: i.item_id, model: i.model, book: book.get(i.item_id) ?? 0 })),
+  };
+}
+
+export type StockCountSummary = {
+  count_id: string;
+  location_id: string;
+  count_date: string;
+  note: string | null;
+  differences: number;
+  units: number;
+  value_eur: number;
+};
+
+export async function getStockCounts(): Promise<StockCountSummary[]> {
+  const client = db();
+  const [counts, adjustments] = await Promise.all([
+    client.from("stock_counts").select("*").order("count_id", { ascending: false }).limit(100),
+    client.from("stock_adjustments").select("count_id, quantity, value_eur").not("count_id", "is", null),
+  ]);
+  const byCount = new Map<string, { differences: number; units: number; value_eur: number }>();
+  for (const a of check<{ count_id: string; quantity: number; value_eur: number }[]>(adjustments, "adjustments")) {
+    const c = byCount.get(a.count_id) ?? { differences: 0, units: 0, value_eur: 0 };
+    c.differences += 1;
+    c.units += a.quantity;
+    c.value_eur += Number(a.value_eur);
+    byCount.set(a.count_id, c);
+  }
+  return check<{ count_id: string; location_id: string; count_date: string; note: string | null }[]>(counts, "stock counts").map((c) => ({
+    ...c,
+    ...(byCount.get(c.count_id) ?? { differences: 0, units: 0, value_eur: 0 }),
+  }));
 }
 
 export async function countPurchaseOrders(): Promise<Record<string, number>> {

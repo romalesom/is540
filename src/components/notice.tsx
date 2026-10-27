@@ -16,6 +16,8 @@ const MESSAGES: Record<string, { text: (id?: string) => string; tone: "ok" | "wa
   transferred: { text: (id) => `Transfer ${id ?? ""} created. The goods are on their way and not available until received.`, tone: "ok" },
   "transfer-received": { text: (id) => `Transfer ${id ?? ""} received. The goods are available at the destination.`, tone: "ok" },
   "transfer-cancelled": { text: (id) => `Transfer ${id ?? ""} cancelled. The goods are back at the source location.`, tone: "ok" },
+  counted: { text: (id) => `Stock count ${id ?? ""} posted. Differences have been booked.`, tone: "ok" },
+  scrapped: { text: (id) => `Write-off ${id ?? ""} booked.`, tone: "ok" },
   returned: { text: (id) => `Return ${id ?? ""} booked. Resellable goods are back in stock, defective ones are written off.`, tone: "ok" },
 };
 

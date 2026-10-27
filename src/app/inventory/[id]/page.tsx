@@ -10,12 +10,14 @@ import { getInventoryRow, getItemActivity, getLocations, getSuppliers } from "@/
 import { gross } from "@/lib/format";
 import { getRole } from "@/lib/role";
 import { getSettings } from "@/lib/settings";
+import { ScrapDialog } from "./scrap-dialog";
 import { SupplierOffers } from "./supplier-offers";
 
 const ASSET_STATUS_LABEL: Record<string, string> = {
   InStock: "In stock",
   InTransit: "In transit",
   InService: "In service",
+  Missing: "Missing",
   Sold: "Sold",
   Scrapped: "Scrapped",
 };
@@ -44,7 +46,7 @@ export default async function ItemDetailPage({ params, searchParams }: PageProps
       <Link href="/inventory" className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-muted hover:text-ink">
         <Icon name="arrow_back" className="!text-[18px]" /> Inventory
       </Link>
-      <Notice code={typeof sp.notice === "string" ? sp.notice : undefined} />
+      <Notice code={typeof sp.notice === "string" ? sp.notice : undefined} id={typeof sp.id === "string" ? sp.id : undefined} />
 
       <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -80,6 +82,14 @@ export default async function ItemDetailPage({ params, searchParams }: PageProps
                     <ButtonLink href={`/transfers/new?item=${item.item_id}`} variant="secondary">
                       <Icon name="swap_horiz" /> Transfer
                     </ButtonLink>
+                    <ScrapDialog
+                      itemId={item.item_id}
+                      model={item.model}
+                      unitCost={item.unit_cost_eur}
+                      stockByLocation={item.stock_by_location}
+                      locations={locations}
+                      machines={item.tracking_mode === "Serialized" ? activity.assets.filter((a) => a.status === "InStock") : undefined}
+                    />
                   </>
                 )}
                 <ButtonLink href={`/inventory/${item.item_id}/edit`} variant="secondary">

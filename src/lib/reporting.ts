@@ -27,6 +27,8 @@ import type { Customer, Item, Location, Supplier } from "./types";
  *                    with a location filter, transit is left out (it belongs to no location)
  *   Stock turnover   annualised COGS of the period / inventory value
  *   Days of cover    current stock / average units sold per day in the period
+ *   Write-offs       Σ value of negative stock adjustments in the period (missing in a count,
+ *                    scrapped) at cost; machines at acquisition cost
  *   On-time delivery received purchase orders with received_date ≤ expected_date / all received
  *   Service coverage sold machines with at least one service record / all sold machines
  */
@@ -66,6 +68,7 @@ const PK: Record<string, string> = {
   sales_returns: "return_id",
   sales_return_assets: "asset_id",
   v_in_transit: "item_id",
+  stock_adjustments: "adjustment_id",
   v_stock: "item_id",
   item_suppliers: "item_id",
 };
@@ -89,6 +92,15 @@ type ReturnRow = {
   disposition: "Resellable" | "Defective";
   refund_eur: number;
   cost_eur: number;
+};
+export type AdjustmentRow = {
+  adjustment_id: string;
+  item_id: string;
+  location_id: string;
+  adjustment_date: string;
+  quantity: number;
+  reason: "Count difference" | "Scrapped";
+  value_eur: number;
 };
 type PoRow = {
   purchase_order_id: string;
@@ -134,7 +146,7 @@ export type SaleLine = {
 
 // Loaded once per request, shared by every report on the page.
 export const loadDataset = cache(async () => {
-  const [items, suppliers, links, locations, customers, orders, pos, assets, services, stock, returns, returnAssets, transit] = await Promise.all([
+  const [items, suppliers, links, locations, customers, orders, pos, assets, services, stock, returns, returnAssets, transit, adjustments] = await Promise.all([
     fetchAll<Item>("items", "*"),
     fetchAll<Supplier>("suppliers", "*"),
     fetchAll<ItemSupplierRow>("item_suppliers", "*"),
@@ -148,6 +160,7 @@ export const loadDataset = cache(async () => {
     fetchAll<ReturnRow>("sales_returns", "*"),
     fetchAll<{ return_id: string; asset_id: string }>("sales_return_assets", "*"),
     fetchAll<{ item_id: string; quantity: number }>("v_in_transit", "*"),
+    fetchAll<AdjustmentRow>("stock_adjustments", "item_id, location_id, adjustment_date, quantity, reason, value_eur, adjustment_id"),
   ]);
 
   const itemById = new Map(items.map((i) => [i.item_id, { ...i, unit_cost_eur: Number(i.unit_cost_eur), sale_price_eur: Number(i.sale_price_eur) }]));
@@ -242,6 +255,7 @@ export const loadDataset = cache(async () => {
     services,
     stockByItem,
     inTransitByItem: new Map(transit.map((t) => [t.item_id, t.quantity])),
+    adjustments: adjustments.map((a) => ({ ...a, value_eur: Number(a.value_eur) })),
     offersByItem: groupOffers(suppliers, links),
     latestSale,
     earliestSale,
