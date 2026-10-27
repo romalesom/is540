@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState, useState, type ReactNode } from "react";
 import { createSalesOrder } from "@/app/actions/sales";
 import { Field, FormError, SubmitButton, controlClass } from "@/components/forms";
+import { PartnerDialog } from "@/components/partner-dialog";
 import { Gross, eur, num } from "@/components/ui";
 import type { Customer, InventoryRow, Location } from "@/lib/types";
 import { LIMITS, discountLabel, discountOptions, suggestedTier, type DiscountTier } from "@/lib/validation";
@@ -26,6 +27,7 @@ export function SaleForm({
   const [state, formAction] = useActionState(createSalesOrder, {});
   const e = state.errors ?? {};
 
+  const [customerId, setCustomerId] = useState(state.values?.customer_id ?? "");
   const [itemId, setItemId] = useState(state.values?.item_id ?? preselected ?? "");
   const item = items.find((i) => i.item_id === itemId);
   // Default source: the location with the most units of this item.
@@ -57,15 +59,18 @@ export function SaleForm({
         <FormError message={state.message} />
         <div className="grid gap-5">
           <Field label="Customer" name="customer_id" error={e.customer_id}>
-            <select id="customer_id" name="customer_id" defaultValue={state.values?.customer_id ?? ""} className={controlClass(e.customer_id)}>
-              <option value="">Choose customer…</option>
-              {customers.map((c) => (
-                <option key={c.customer_id} value={c.customer_id}>
-                  {c.customer_name}
-                  {c.city ? ` · ${c.city}` : ""}
-                </option>
-              ))}
-            </select>
+            <div className="flex gap-2">
+              <select id="customer_id" name="customer_id" value={customerId} onChange={(ev) => setCustomerId(ev.target.value)} className={controlClass(e.customer_id)}>
+                <option value="">Choose customer…</option>
+                {customers.map((c) => (
+                  <option key={c.customer_id} value={c.customer_id}>
+                    {c.customer_name}
+                    {c.city ? ` · ${c.city}` : ""}
+                  </option>
+                ))}
+              </select>
+              <PartnerDialog kind="customer" buttonLabel="New" buttonIcon="person_add" onSaved={setCustomerId} />
+            </div>
           </Field>
           <Field label="Item" name="item_id" error={e.item_id} hint="Only items with stock are listed.">
             <select

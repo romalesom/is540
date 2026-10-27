@@ -14,6 +14,7 @@ const NAV = [
   { href: "/orders", label: "Purchase orders", icon: "local_shipping" },
   { href: "/suppliers", label: "Suppliers", icon: "factory" },
   { href: "/sales", label: "Sales orders", icon: "point_of_sale" },
+  { href: "/customers", label: "Customers", icon: "groups" },
   { href: "/transfers", label: "Transfers", icon: "swap_horiz" },
   { href: "/counts", label: "Stock counts", icon: "fact_check" },
   { href: "/service", label: "Service", icon: "build" },

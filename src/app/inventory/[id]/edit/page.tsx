@@ -16,7 +16,7 @@ export default async function EditItemPage({ params }: PageProps<"/inventory/[id
       <PageHeader eyebrow={item.item_id} title={`Edit ${item.model}`} />
       <ItemForm
         action={updateItem.bind(null, item.item_id)}
-        suppliers={suppliers}
+        suppliers={suppliers.filter((s) => s.status === "Active")}
         categories={categories}
         item={item}
         cancelHref={`/inventory/${item.item_id}`}

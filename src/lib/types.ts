@@ -23,6 +23,7 @@ export type Supplier = {
   country: string | null;
   lead_time_days: number;
   contact: string | null;
+  status: "Active" | "Inactive";
 };
 
 // One supplier's offer for an item (item_suppliers). lead_time_days is the
@@ -33,6 +34,8 @@ export type SupplierOffer = {
   unit_cost_eur: number;
   lead_time_days: number;
   lead_time_override: number | null;
+  /** Inactive suppliers keep their prices but cannot be ordered from. */
+  active: boolean;
 };
 
 export type StockStatus = "out" | "low" | "ok";
@@ -60,4 +63,5 @@ export type Customer = {
   city: string | null;
   country: string | null;
   contact: string | null;
+  status: "Active" | "Inactive";
 };

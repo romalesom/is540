@@ -143,7 +143,7 @@ export default async function ItemDetailPage({ params, searchParams }: PageProps
       <SupplierOffers
         itemId={item.item_id}
         offers={item.suppliers}
-        allSuppliers={suppliers}
+        allSuppliers={suppliers.filter((s) => s.status === "Active")}
         standardCost={item.unit_cost_eur}
         salePrice={item.sale_price_eur}
         vatRate={settings.vatRate}

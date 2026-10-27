@@ -38,7 +38,7 @@ export async function createItem(_prev: FormState, form: FormData): Promise<Form
     const { count } = await db().from("items").select("item_id", { count: "exact", head: true }).eq("item_id", itemId);
     if (count) f.errors.item_id = `${itemId} already exists.`;
   }
-  const { offers, error: offerError } = parseOffers(form, (await getSuppliers()).map((s) => s.supplier_id));
+  const { offers, error: offerError } = parseOffers(form, (await getSuppliers()).filter((s) => s.status === "Active").map((s) => s.supplier_id));
   if (offerError) f.errors.suppliers = offerError;
   if (!f.valid) return f.fail();
 

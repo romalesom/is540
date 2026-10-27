@@ -18,7 +18,7 @@ export default async function NewSalePage({ searchParams }: PageProps<"/sales/ne
         title="New sales order"
         description="Sell from a location's stock. Price and total are calculated from the list price."
       />
-      <SaleForm items={items} locations={locations} customers={customers} preselected={preselected} tiers={settings.tiers} vatRate={settings.vatRate} />
+      <SaleForm items={items} locations={locations} customers={customers.filter((c) => c.status === "Active")} preselected={preselected} tiers={settings.tiers} vatRate={settings.vatRate} />
     </div>
   );
 }

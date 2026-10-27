@@ -34,9 +34,12 @@ export function OrderForm({
   const [qty, setQty] = useState(state.values?.quantity ?? (item ? String(item.reorder_qty) : ""));
 
   // Suppliers arrive sorted cheapest first, so index 0 is the default choice.
-  const [supplierId, setSupplierId] = useState(state.values?.supplier_id ?? item?.suppliers[0]?.supplier_id ?? "");
-  const supplier = item?.suppliers.find((s) => s.supplier_id === supplierId);
-  const cheapest = item?.suppliers[0];
+  // Inactive suppliers cannot be ordered from; the rest arrive cheapest first.
+  const offersOf = (i?: InventoryRow) => i?.suppliers.filter((s) => s.active) ?? [];
+  const offers = offersOf(item);
+  const [supplierId, setSupplierId] = useState(state.values?.supplier_id ?? offers[0]?.supplier_id ?? "");
+  const supplier = offers.find((s) => s.supplier_id === supplierId);
+  const cheapest = offers[0];
   const quantity = Number(qty);
   const total = supplier && quantity > 0 ? quantity * supplier.unit_cost_eur : 0;
   const expected = supplier
@@ -49,7 +52,7 @@ export function OrderForm({
     setItemId(id);
     setLocationId(defaultLocation(next));
     setQty(next ? String(next.reorder_qty) : "");
-    setSupplierId(next?.suppliers[0]?.supplier_id ?? "");
+    setSupplierId(offersOf(next)[0]?.supplier_id ?? "");
   }
 
   return (
@@ -87,13 +90,13 @@ export function OrderForm({
           {item && (
             <fieldset>
               <legend className="mb-1.5 text-sm font-semibold text-ink">Supplier</legend>
-              {item.suppliers.length === 0 ? (
+              {offers.length === 0 ? (
                 <p className="rounded-control border border-brand/30 bg-brand-soft px-4 py-3 text-sm text-brand">
-                  No supplier is listed for this item. Add one on the item page first.
+                  No active supplier is listed for this item. Add one or reactivate a supplier first.
                 </p>
               ) : (
                 <div className="grid gap-2">
-                  {item.suppliers.map((s, i) => {
+                  {offers.map((s, i) => {
                     const selected = s.supplier_id === supplierId;
                     const diff = cheapest ? s.unit_cost_eur - cheapest.unit_cost_eur : 0;
                     return (

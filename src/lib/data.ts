@@ -28,9 +28,17 @@ export function stockStatus(qty: number, reorderPoint: number): StockStatus {
 
 export type ItemSupplierRow = { item_id: string; supplier_id: string; unit_cost_eur: number; lead_time_days: number | null };
 
-/** Cheapest offer first; ties go to the shorter lead time, then the name. */
+/**
+ * Active suppliers first, then the cheapest offer; ties go to the shorter lead
+ * time, then the name. So offers[0] is always the default supplier to order from.
+ */
 export function compareOffers(a: SupplierOffer, b: SupplierOffer) {
-  return a.unit_cost_eur - b.unit_cost_eur || a.lead_time_days - b.lead_time_days || a.supplier_name.localeCompare(b.supplier_name);
+  return (
+    Number(b.active) - Number(a.active) ||
+    a.unit_cost_eur - b.unit_cost_eur ||
+    a.lead_time_days - b.lead_time_days ||
+    a.supplier_name.localeCompare(b.supplier_name)
+  );
 }
 
 export function groupOffers(suppliers: Supplier[], links: ItemSupplierRow[]) {
@@ -45,6 +53,7 @@ export function groupOffers(suppliers: Supplier[], links: ItemSupplierRow[]) {
       unit_cost_eur: Number(l.unit_cost_eur),
       lead_time_days: l.lead_time_days ?? s.lead_time_days,
       lead_time_override: l.lead_time_days,
+      active: s.status !== "Inactive",
     };
     map.set(l.item_id, [...(map.get(l.item_id) ?? []), offer]);
   }
@@ -95,7 +104,7 @@ export async function getInventory(): Promise<InventoryRow[]> {
       unit_cost_eur: Number(item.unit_cost_eur),
       sale_price_eur: Number(item.sale_price_eur),
       suppliers: offers.get(item.item_id) ?? [],
-      supplier_name: offers.get(item.item_id)?.[0]?.supplier_name ?? "No supplier",
+      supplier_name: offers.get(item.item_id)?.find((o) => o.active)?.supplier_name ?? "No active supplier",
       stock_by_location: stockByLocation,
       stock_qty: stockQty,
       on_order_qty: onOrder.get(item.item_id) ?? 0,

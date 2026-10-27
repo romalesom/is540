@@ -16,7 +16,7 @@ function readOffer(f: Fields) {
 export async function addItemSupplier(itemId: string, _prev: FormState, form: FormData): Promise<FormState> {
   await requireManager();
   const f = new Fields(form);
-  const supplierId = f.oneOf("supplier_id", "Supplier", (await getSuppliers()).map((s) => s.supplier_id));
+  const supplierId = f.oneOf("supplier_id", "Supplier", (await getSuppliers()).filter((s) => s.status === "Active").map((s) => s.supplier_id));
   const offer = readOffer(f);
   if (!f.valid) return f.fail();
 

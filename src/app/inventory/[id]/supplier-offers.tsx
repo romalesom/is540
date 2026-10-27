@@ -25,7 +25,9 @@ export function SupplierOffers({
   vatRate: number;
   isManager: boolean;
 }) {
-  const cheapest = offers[0];
+  // offers arrive active first, cheapest first.
+  const cheapest = offers.find((o) => o.active);
+  const activeCount = offers.filter((o) => o.active).length;
   const available = allSuppliers.filter((s) => !offers.some((o) => o.supplier_id === s.supplier_id));
   const deviation = cheapest ? cheapest.unit_cost_eur - standardCost : 0;
 
@@ -54,20 +56,24 @@ export function SupplierOffers({
         )}
       </div>
 
-      {offers.length === 0 ? (
-        <p className="px-5 py-6 text-sm text-brand">No supplier listed — this item cannot be reordered until one is added.</p>
-      ) : (
+      {activeCount === 0 ? (
+        <p className="border-b border-line px-5 py-4 text-sm text-brand">
+          {offers.length === 0 ? "No supplier listed" : "No active supplier"} — this item cannot be reordered until one is added or reactivated.
+        </p>
+      ) : null}
+      {offers.length > 0 && (
         <ul className="divide-y divide-line">
           {offers.map((o, i) => {
             const margin = salePrice - o.unit_cost_eur;
             return (
-              <li key={o.supplier_id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3.5 text-sm md:px-5">
+              <li key={o.supplier_id} className={`flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3.5 text-sm md:px-5 ${o.active ? "" : "bg-canvas/60 text-muted"}`}>
                 <div className="min-w-0 flex-1 basis-full sm:basis-auto">
                   <div className="font-semibold text-ink">
                     {o.supplier_name}
-                    {i === 0 && offers.length > 1 && (
+                    {i === 0 && o.active && activeCount > 1 && (
                       <span className="ml-2 rounded-full bg-ok-soft px-2 py-0.5 text-[11px] font-semibold text-ok">Cheapest</span>
                     )}
+                    {!o.active && <span className="ml-2 rounded-full bg-canvas px-2 py-0.5 text-[11px] font-semibold text-muted ring-1 ring-line">Inactive</span>}
                   </div>
                   <div className="text-xs text-muted">
                     {o.lead_time_days} days lead time {o.lead_time_override == null ? "(supplier default)" : "(item-specific)"}

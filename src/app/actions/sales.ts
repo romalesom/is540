@@ -39,7 +39,7 @@ export async function createSalesOrder(_prev: FormState, form: FormData): Promis
   await requireManager();
   const f = new Fields(form);
   const [customers, locations, settings] = await Promise.all([getCustomers(), getLocations(), getSettings()]);
-  const customerId = f.oneOf("customer_id", "Customer", customers.map((c) => c.customer_id));
+  const customerId = f.oneOf("customer_id", "Customer", customers.filter((c) => c.status === "Active").map((c) => c.customer_id));
   const itemId = f.text("item_id", "Item");
   const locationId = f.oneOf("location_id", "Location", locations.map((l) => l.location_id));
   const quantity = f.number("quantity", "Quantity", { ...LIMITS.orderQty, integer: true });

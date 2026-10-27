@@ -35,6 +35,7 @@ Prüfen mit `npx tsc --noEmit`, `npm run lint` und `npm run build`. Nach neuen R
 - **Inventory:** Suche, Sortierung, Filter nach Kategorie, Standort und Bestandsstatus
 - **Detail:** Bestand je Standort, Bewegungen, Service-Historie, Geräte
 - **New item / Edit:** ID-Vorschlag, Prüfung auf doppelte IDs und plausible Werte; beim Anlegen mindestens ein Lieferant mit Preis
+- **Customers** (`/customers`) und **Suppliers** (`/suppliers`): anlegen, bearbeiten, deaktivieren/reaktivieren (nie löschen, Aufträge verweisen darauf). Namen eindeutig (ohne Groß-/Kleinschreibung). Inaktive Kunden sind im Verkaufsformular nicht wählbar; inaktive Lieferanten erscheinen nicht im Bestellformular, ihre Preise bleiben ausgegraut sichtbar, offene Bestellungen laufen weiter. Im Verkaufsformular legt „New“ direkt einen Kunden an und wählt ihn aus.
 - **Lieferanten je Artikel** (n:m): in der Detailansicht hinzufügen, Preis und Lieferzeit ändern, entfernen (der letzte Lieferant ist nicht entfernbar); Seite `/suppliers` zeigt alle Lieferanten mit Artikeln und Preisen
 - **Remove:** nur bei Bestand 0 und ohne offene Bestellung; setzt immer den Status `Discontinued` (Soft Delete), nie hartes Löschen
 - **Purchase orders:** anlegen mit Lieferantenauswahl (günstigster vorausgewählt, bei Gleichstand kürzere Lieferzeit; Preis und Liefertermin vom gewählten Lieferanten); Receive (Maschinen → neue Assets, Zubehör → `inventory` +); Cancel
@@ -64,7 +65,8 @@ Kennzahlen und Formeln liegen zentral in [src/lib/reporting.ts](src/lib/reportin
 - `stock_counts` (`CNT-####`, Standort, Datum, Notiz) und `stock_adjustments` (`ADJ-#####`): Artikel, Standort, Menge mit Vorzeichen, Grund Count difference | Scrapped, `value_eur` mit Vorzeichen (zu Kosten), optional `count_id`. `stock_adjustment_assets` verknüpft Maschinen. Gebucht nur über `post_stock_count(...)` und `scrap_stock(...)`. Asset-Status jetzt InStock | InTransit | InService | Missing | Sold | Scrapped.
 - **Reporting Inventory health:** Bestandswert inkl. Unterwegs-Ware (ohne Standortfilter); Karte „Write-offs by item“ = negative Korrekturen im Zeitraum zu Kosten, wiedergefundene Ware separat.
 - `app_settings` (genau eine Zeile, `id = 1`): `vat_rate` als Dezimalbruch (0.19). `discount_tiers`: `rate` (PK, Dezimalbruch), `min_qty` optional (leer → wählbar, nie vorausgewählt).
-- Weitere Tabellen: `service_history`, `suppliers`, `locations`, `customers`
+- `customers` (`CUS-##`) und `suppliers` (`SUP-##`): `status` Active | Inactive (seit 27.10.2026). Angebote sind aktiv zuerst, dann günstigster sortiert, d. h. `item.suppliers[0]` ist der Standardlieferant.
+- Weitere Tabellen: `service_history`, `locations`
 - Views:
   - `v_stock`: Bestand = InStock-Assets + `inventory`
   - `v_order_margin`: Marge = Anschaffungskosten der verknüpften Assets (inkl. über `sales_return_assets` zurückgegebener), sonst Menge × Artikelkosten
@@ -101,7 +103,11 @@ Kennzahlen und Formeln liegen zentral in [src/lib/reporting.ts](src/lib/reportin
    delete from sales_orders    where order_date > '2026-09-30';
    delete from inventory       where item_id    > 'MCH-032';
    delete from purchase_orders where order_date > '2026-09-30';
+   delete from item_suppliers  where item_id    > 'MCH-032';
    delete from items           where item_id    > 'MCH-032';
+   -- Test-Stammdaten vom 27.10.2026 (ohne Aufträge)
+   delete from customers       where customer_id in ('CUS-16', 'CUS-17');
+   delete from suppliers       where supplier_id = 'SUP-07';
    commit;
    ```
 2. **Storno nach Versand** (Shipped → Cancelled) ist nicht vorgesehen. Bei Bedarf mit dem Nutzer klären.

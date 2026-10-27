@@ -15,7 +15,7 @@ export default async function NewItemPage() {
         title="New item"
         description="Add a model to the range. Stock starts at zero and is built up through purchase orders."
       />
-      <ItemForm action={createItem} suppliers={suppliers} categories={categories} suggestedId={suggestedId} cancelHref="/inventory" vatRate={vatRate} />
+      <ItemForm action={createItem} suppliers={suppliers.filter((s) => s.status === "Active")} categories={categories} suggestedId={suggestedId} cancelHref="/inventory" vatRate={vatRate} />
     </div>
   );
 }

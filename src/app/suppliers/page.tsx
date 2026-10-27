@@ -1,14 +1,19 @@
 import Link from "next/link";
+import { setPartnerStatus } from "@/app/actions/partners";
+import { ConfirmAction } from "@/components/forms";
+import { PartnerDialog } from "@/components/partner-dialog";
 import { Icon } from "@/components/icon";
 import { Card, EmptyState, Gross, PageHeader, eur, num } from "@/components/ui";
 import { getInventory, getSuppliers } from "@/lib/data";
 import { loadDataset, pct } from "@/lib/reporting";
+import { getRole } from "@/lib/role";
 import { getSettings } from "@/lib/settings";
 
 export default async function SuppliersPage() {
-  const [suppliers, inventory, ds, { vatRate }] = await Promise.all([getSuppliers(), getInventory(), loadDataset(), getSettings()]);
+  const [suppliers, inventory, ds, { vatRate }, role] = await Promise.all([getSuppliers(), getInventory(), loadDataset(), getSettings(), getRole()]);
+  const isManager = role === "manager";
 
-  const cards = suppliers.map((s) => {
+  const cards = [...suppliers].sort((a, b) => Number(a.status === "Inactive") - Number(b.status === "Inactive")).map((s) => {
     const items = inventory
       .map((i) => ({ item: i, offer: i.suppliers.find((o) => o.supplier_id === s.supplier_id) }))
       .filter((x) => x.offer)
@@ -25,11 +30,12 @@ export default async function SuppliersPage() {
       <PageHeader
         eyebrow="Purchasing"
         title="Suppliers"
-        description="Who supplies which items at what price. Prices and supplier links are maintained on each item's page."
+        description="Who supplies which items at what price. Prices and supplier links are maintained on each item's page. Inactive suppliers cannot be ordered from."
+        actions={isManager ? <PartnerDialog kind="supplier" buttonLabel="New supplier" buttonIcon="add_business" variant="primary" /> : undefined}
       />
       <div className="grid gap-4 xl:grid-cols-2">
         {cards.map(({ s, items, onTime, received, open, volume }) => (
-          <Card key={s.supplier_id} className="overflow-hidden">
+          <Card key={s.supplier_id} className={`overflow-hidden ${s.status === "Inactive" ? "opacity-70" : ""}`}>
             <div className="border-b border-line px-4 py-4 md:px-5">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
@@ -38,8 +44,29 @@ export default async function SuppliersPage() {
                     {[s.country, s.contact].filter(Boolean).join(" · ") || "–"} · default lead time {s.lead_time_days} days
                   </p>
                 </div>
-                <span className="rounded-full bg-canvas px-2.5 py-1 font-mono text-[11px] text-muted">{s.supplier_id}</span>
+                <div className="flex items-center gap-2">
+                  {s.status === "Inactive" && <span className="rounded-full bg-canvas px-2.5 py-1 text-[11px] font-semibold text-muted ring-1 ring-line">Inactive</span>}
+                  <span className="rounded-full bg-canvas px-2.5 py-1 font-mono text-[11px] text-muted">{s.supplier_id}</span>
+                </div>
               </div>
+              {isManager && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <PartnerDialog kind="supplier" partner={s} buttonLabel="Edit" buttonIcon="edit" />
+                  <ConfirmAction
+                    action={setPartnerStatus.bind(null, "suppliers", s.supplier_id, s.status === "Inactive" ? "Active" : "Inactive")}
+                    label={s.status === "Inactive" ? "Reactivate" : "Deactivate"}
+                    icon={s.status === "Inactive" ? "restart_alt" : "block"}
+                    variant={s.status === "Inactive" ? "secondary" : "danger"}
+                    title={`${s.status === "Inactive" ? "Reactivate" : "Deactivate"} ${s.supplier_name}?`}
+                    text={
+                      s.status === "Inactive"
+                        ? "The supplier can be chosen for new purchase orders again."
+                        : `New purchase orders can no longer go to this supplier; open orders continue.${items.some(({ item }) => item.suppliers.filter((o) => o.active).length === 1 && item.suppliers.find((o) => o.active)?.supplier_id === s.supplier_id) ? " Some items have no other active supplier and could no longer be reordered." : ""}`
+                    }
+                    confirmLabel={s.status === "Inactive" ? "Reactivate" : "Deactivate"}
+                  />
+                </div>
+              )}
               <dl className="mt-3 grid grid-cols-3 gap-2 text-xs">
                 <div>
                   <dt className="text-muted">On-time delivery</dt>

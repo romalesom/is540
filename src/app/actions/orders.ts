@@ -51,9 +51,10 @@ export async function createPurchaseOrder(_prev: FormState, form: FormData): Pro
           .maybeSingle<{ unit_cost_eur: number; lead_time_days: number | null }>()
       : { data: null };
   if (item && supplierId && !offer) f.errors.supplier_id = "This supplier does not deliver this item.";
+  const supplier = (await getSuppliers()).find((s) => s.supplier_id === supplierId);
+  if (supplier?.status === "Inactive") f.errors.supplier_id = `${supplier.supplier_name} is inactive and cannot be ordered from.`;
   if (!f.valid || !item || !offer) return f.fail();
 
-  const supplier = (await getSuppliers()).find((s) => s.supplier_id === supplierId);
   const orderDate = today();
   const id = await nextPurchaseOrderId(item.item_id, orderDate);
   const { error } = await db().from("purchase_orders").insert({
