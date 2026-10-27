@@ -7,6 +7,7 @@ const MESSAGES: Record<string, { text: (id?: string) => string; tone: "ok" | "wa
   reactivated: { text: () => "Item is active again and can be ordered.", tone: "ok" },
   blocked: { text: () => "Only items with zero stock and no open order can be removed.", tone: "warn" },
   ordered: { text: (id) => `Purchase order ${id ?? ""} placed.`, tone: "ok" },
+  "ordered-bulk": { text: (n) => (n === "1" ? "1 purchase order placed." : `${n ?? ""} purchase orders placed.`), tone: "ok" },
   received: { text: (id) => `Goods for ${id ?? "the order"} received and booked into stock.`, tone: "ok" },
   cancelled: { text: (id) => `Purchase order ${id ?? ""} cancelled.`, tone: "ok" },
   sold: { text: (id) => `Sales order ${id ?? ""} created. Stock has been booked out.`, tone: "ok" },

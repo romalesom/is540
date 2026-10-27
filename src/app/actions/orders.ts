@@ -157,3 +157,65 @@ export async function cancelPurchaseOrder(id: string): Promise<void> {
   revalidatePath("/", "layout");
   redirect(`/orders?notice=cancelled&id=${id}`);
 }
+
+/**
+ * Several purchase orders at once from the low-stock alerts (one per item).
+ * Each line names item, supplier, destination and quantity; price and
+ * delivery date come from the item's supplier offer as for a single order.
+ * All rows go into one insert, so either every order is placed or none.
+ */
+export async function createPurchaseOrders(_prev: FormState, form: FormData): Promise<FormState> {
+  await requireManager();
+  const items = form.getAll("line_item").map(String);
+  const suppliers = form.getAll("line_supplier").map(String);
+  const locationsIn = form.getAll("line_location").map(String);
+  const quantities = form.getAll("line_qty").map(String);
+  const values = { lines: JSON.stringify(items.map((id, i) => [id, suppliers[i], locationsIn[i], quantities[i]])) };
+  const fail = (message: string): FormState => ({ ok: false, message, values });
+  if (items.length === 0) return fail("Choose at least one item.");
+  if (new Set(items).size !== items.length) return fail("Each item can only be ordered once per batch.");
+
+  const client = db();
+  const [{ data: itemRows }, { data: offers }, supplierList, locationList] = await Promise.all([
+    client.from("items").select("*").in("item_id", items),
+    client.from("item_suppliers").select("item_id, supplier_id, unit_cost_eur, lead_time_days").in("item_id", items),
+    getSuppliers(),
+    getLocations(),
+  ]);
+  const itemById = new Map(((itemRows ?? []) as Item[]).map((i) => [i.item_id, i]));
+  const supplierById = new Map(supplierList.map((s) => [s.supplier_id, s]));
+
+  const orderDate = today();
+  const rows: PurchaseOrder[] = [];
+  for (let i = 0; i < items.length; i++) {
+    const item = itemById.get(items[i]);
+    const label = item?.model ?? items[i];
+    if (!item || item.status !== "Active") return fail(`${label}: only active items can be ordered.`);
+    const offer = (offers ?? []).find((o) => o.item_id === item.item_id && o.supplier_id === suppliers[i]);
+    const supplier = supplierById.get(suppliers[i]);
+    if (!offer || !supplier) return fail(`${label}: choose a supplier that delivers this item.`);
+    if (supplier.status === "Inactive") return fail(`${label}: ${supplier.supplier_name} is inactive.`);
+    if (!locationList.some((l) => l.location_id === locationsIn[i])) return fail(`${label}: choose a destination.`);
+    const qty = Number(quantities[i]);
+    if (!Number.isInteger(qty) || qty < LIMITS.orderQty.min || qty > LIMITS.orderQty.max) {
+      return fail(`${label}: quantity must be a whole number between ${LIMITS.orderQty.min} and ${LIMITS.orderQty.max}.`);
+    }
+    rows.push({
+      purchase_order_id: await nextPurchaseOrderId(item.item_id, orderDate),
+      order_date: orderDate,
+      supplier_id: supplier.supplier_id,
+      item_id: item.item_id,
+      location_id: locationsIn[i],
+      quantity: qty,
+      unit_cost_eur: Number(offer.unit_cost_eur),
+      expected_date: addDays(orderDate, offer.lead_time_days ?? supplier.lead_time_days),
+      received_date: null,
+      status: "Ordered",
+    });
+  }
+
+  const { error } = await client.from("purchase_orders").insert(rows);
+  if (error) return fail(`Orders could not be saved: ${error.message}`);
+  revalidatePath("/", "layout");
+  redirect(`/orders?notice=ordered-bulk&id=${rows.length}`);
+}
