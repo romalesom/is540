@@ -4,12 +4,14 @@ import {
   PERIODS,
   delta,
   filterSales,
+  filterServices,
   groupBy,
   inventoryValue,
   loadDataset,
   parseFilters,
   pct,
   resolveRange,
+  serviceTotals,
   totals,
 } from "@/lib/reporting";
 import { ReportFilters } from "./report-filters";
@@ -25,6 +27,9 @@ export default async function ManagementSummary({ searchParams }: PageProps<"/re
   const prev = filterSales(ds, f, range.prevFrom, range.prevTo);
   const t = totals(lines);
   const p = totals(prev);
+  // Gross profit = margin on goods + profit on services, both shown separately.
+  const sv = serviceTotals(filterServices(ds, f, range.from, range.to));
+  const svPrev = serviceTotals(filterServices(ds, f, range.prevFrom, range.prevTo));
   const opts = filterOptions(ds);
   const singleMonth = range.months.length === 1;
 
@@ -57,8 +62,14 @@ export default async function ManagementSummary({ searchParams }: PageProps<"/re
 
       <KpiRow>
         <Kpi label="Revenue" value={t.revenue} format="eur" delta={delta(t.revenue, p.revenue, c)} hint={c ? "vs previous period" : undefined} />
-        <Kpi label="Gross margin" value={t.margin} format="eur" delta={delta(t.margin, p.margin, c)} hint={c ? "vs previous period" : undefined} />
-        <Kpi label="Margin %" value={pct(t.margin, t.revenue)} format="pct" delta={delta(pct(t.margin, t.revenue), pct(p.margin, p.revenue), c)} />
+        <Kpi
+          label="Gross profit"
+          value={t.margin + sv.profit}
+          format="eur"
+          delta={delta(t.margin + sv.profit, p.margin + svPrev.profit, c)}
+          hint={`goods ${fmt(t.margin, "eur")} · service ${fmt(sv.profit, "eur")}`}
+        />
+        <Kpi label="Goods margin %" value={pct(t.margin, t.revenue)} format="pct" delta={delta(pct(t.margin, t.revenue), pct(p.margin, p.revenue), c)} />
         <Kpi label="Units sold" value={t.units} format="num" delta={delta(t.units, p.units, c)} hint={`${fmt(t.orders, "num")} orders${t.returnedUnits ? ` · net of ${fmt(t.returnedUnits, "num")} returned` : ""}`} />
         <Kpi label="Inventory value" value={inventoryValue(ds, f)} format="eur" hint="current stock × unit cost" />
       </KpiRow>

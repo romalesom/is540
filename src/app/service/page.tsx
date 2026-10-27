@@ -38,11 +38,12 @@ export default async function ServicePage({ searchParams }: PageProps<"/service"
   const dueSoon = upcoming.filter((s) => daysBetween(today, s.next_service_due) <= 30);
   const pages = Math.max(1, Math.ceil(never.total / PAGE_SIZE));
 
-  const recordButton = (assetId: string, label: string) =>
+  const recordButton = (assetId: string, label: string, billable = true) =>
     isManager && (
       <RecordServiceButton
         assetId={assetId}
         label={label}
+        billable={billable}
         today={today}
         serviceTypes={SERVICE_TYPES}
         intervalDays={SERVICE_INTERVAL_DAYS}
@@ -207,7 +208,7 @@ function ScheduleTable({
   today: string;
   locationName: Map<string, string>;
   overdue?: boolean;
-  action: (assetId: string, label: string) => ReactNode;
+  action: (assetId: string, label: string, billable?: boolean) => ReactNode;
 }) {
   const where = (s: ServiceDue) =>
     s.asset_status === "Sold" ? s.customer_name : s.location_id ? locationName.get(s.location_id) : null;
@@ -236,8 +237,8 @@ function ScheduleTable({
             {s.asset_status === "Sold" ? "At customer" : "In stock"} · last {s.last_service_type.toLowerCase()} {s.last_service_date}
             {s.last_outcome === "Follow-up needed" && <span className="font-semibold text-[#8a5a00]"> · follow-up needed</span>}
           </div>
-          {action(s.asset_id, `${s.serial_number} · ${s.model}${where(s) ? ` · ${where(s)}` : ""}`) && (
-            <div className="mt-3">{action(s.asset_id, `${s.serial_number} · ${s.model}${where(s) ? ` · ${where(s)}` : ""}`)}</div>
+          {action(s.asset_id, `${s.serial_number} · ${s.model}${where(s) ? ` · ${where(s)}` : ""}`, s.asset_status === "Sold") && (
+            <div className="mt-3">{action(s.asset_id, `${s.serial_number} · ${s.model}${where(s) ? ` · ${where(s)}` : ""}`, s.asset_status === "Sold")}</div>
           )}
         </li>
       ))}
@@ -275,7 +276,7 @@ function ScheduleTable({
                     {dueText(s)}
                   </div>
                 </td>
-                <td className="px-5 py-3 text-right">{action(s.asset_id, `${s.serial_number} · ${s.model}${place ? ` · ${place}` : ""}`)}</td>
+                <td className="px-5 py-3 text-right">{action(s.asset_id, `${s.serial_number} · ${s.model}${place ? ` · ${place}` : ""}`, s.asset_status === "Sold")}</td>
               </tr>
             );
           })}

@@ -4,6 +4,7 @@ import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { recordService } from "@/app/actions/service";
 import { Field, FormError, SubmitButton, controlClass } from "@/components/forms";
 import { Icon } from "@/components/icon";
+import { eur } from "@/components/ui";
 import type { FormState } from "@/lib/validation";
 
 const addDays = (iso: string, days: number) => new Date(Date.parse(iso) + days * 86_400_000).toISOString().slice(0, 10);
@@ -14,18 +15,24 @@ export function RecordServiceButton({
   today,
   serviceTypes,
   intervalDays,
+  billable,
 }: {
   assetId: string;
   label: string;
   today: string;
   serviceTypes: readonly string[];
   intervalDays: number;
+  /** Machine is at a customer; otherwise the service is internal and not charged. */
+  billable: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [state, formAction] = useActionState<FormState, FormData>(recordService.bind(null, assetId), {});
   const [serviceDate, setServiceDate] = useState(today);
   const [nextDue, setNextDue] = useState(addDays(today, intervalDays));
   const e = state.errors ?? {};
+  const [cost, setCost] = useState(state.values?.cost_eur ?? "0");
+  const [price, setPrice] = useState(state.values?.price_eur ?? "");
+  const profit = Number(price || 0) - Number(cost || 0);
   // One dialog per row, so field IDs need a per-instance prefix.
   const uid = useId();
   const fid = (n: string) => `${uid}-${n}`;
@@ -77,9 +84,49 @@ export function RecordServiceButton({
             <Field label="Technician" name="technician" id={fid("technician")} error={e.technician}>
               <input id={fid("technician")} name="technician" defaultValue={state.values?.technician ?? ""} placeholder="e.g. J. Keller" className={controlClass(e.technician)} />
             </Field>
-            <Field label="Cost (€)" name="cost_eur" id={fid("cost_eur")} error={e.cost_eur}>
-              <input id={fid("cost_eur")} name="cost_eur" type="number" min={0} max={5000} step="0.01" defaultValue={state.values?.cost_eur ?? "0"} className={controlClass(e.cost_eur)} />
+            <Field label="Our cost (€)" name="cost_eur" id={fid("cost_eur")} error={e.cost_eur} hint="Parts and labour on our side">
+              <input
+                id={fid("cost_eur")}
+                name="cost_eur"
+                type="number"
+                min={0}
+                max={5000}
+                step="0.01"
+                value={cost}
+                onChange={(ev) => setCost(ev.target.value)}
+                className={controlClass(e.cost_eur)}
+              />
             </Field>
+            {billable ? (
+              <Field
+                label="Price charged (€)"
+                name="price_eur"
+                id={fid("price_eur")}
+                error={e.price_eur}
+                hint={
+                  price === ""
+                    ? "Net amount invoiced to the customer"
+                    : `Profit ${eur(profit)}${Number(price) > 0 ? ` · ${((profit / Number(price)) * 100).toFixed(1)} % margin` : ""}${profit < 0 ? " – below cost" : ""}`
+                }
+              >
+                <input
+                  id={fid("price_eur")}
+                  name="price_eur"
+                  type="number"
+                  min={0}
+                  max={10000}
+                  step="0.01"
+                  value={price}
+                  onChange={(ev) => setPrice(ev.target.value)}
+                  className={controlClass(e.price_eur ?? (price !== "" && profit < 0 ? "warn" : undefined))}
+                />
+              </Field>
+            ) : (
+              <div>
+                <span className="mb-1.5 block text-sm font-semibold text-ink">Price charged</span>
+                <p className="rounded-control bg-canvas px-3 py-2.5 text-sm text-muted">Internal service – the machine is not at a customer, so nothing is charged.</p>
+              </div>
+            )}
             <Field label="Outcome" name="outcome" id={fid("outcome")} error={e.outcome}>
               <select id={fid("outcome")} name="outcome" defaultValue={state.values?.outcome ?? "Completed"} className={controlClass(e.outcome)}>
                 <option>Completed</option>

@@ -30,6 +30,9 @@ export async function recordService(assetId: string, _prev: FormState, form: For
   const { data: asset } = await client.from("assets").select("status").eq("asset_id", assetId).maybeSingle();
   if (!asset) return { ok: false, message: `Machine ${assetId} not found.` };
   if (asset.status === "Scrapped") return { ok: false, message: "Scrapped machines cannot be serviced." };
+  // Only machines at a customer are charged; services on stock machines are internal.
+  const billable = asset.status === "Sold";
+  const price = billable ? f.number("price_eur", "Price", { min: 0, max: 10_000 }) : 0;
   if (!f.valid) return f.fail();
 
   // Service IDs are SVC-<4 digits>, so text order equals numeric order.
@@ -43,6 +46,7 @@ export async function recordService(assetId: string, _prev: FormState, form: For
     service_type: serviceType,
     technician,
     cost_eur: cost,
+    price_eur: price,
     outcome,
     next_service_due: nextDue,
   });

@@ -31,6 +31,9 @@ import type { Customer, Item, Location, Supplier } from "./types";
  *                    scrapped) at cost; machines at acquisition cost
  *   On-time delivery received purchase orders with received_date ≤ expected_date / all received
  *   Service coverage sold machines with at least one service record / all sold machines
+ *   Service revenue  Σ price charged for services in the period (internal services on stock machines: 0)
+ *   Service profit   Service revenue − our service cost;  Service margin = profit / revenue
+ *   Gross profit     Gross margin on goods + service profit (management summary)
  */
 
 const PAGE = 1000;
@@ -114,15 +117,32 @@ type PoRow = {
   received_date: string | null;
   status: string;
 };
-type AssetRow = { asset_id: string; item_id: string; status: string; order_id: string | null; acquisition_cost_eur: number };
+type AssetRow = { asset_id: string; item_id: string; status: string; order_id: string | null; location_id: string | null; acquisition_cost_eur: number };
 type ServiceRow = {
   service_id: string;
   asset_id: string;
   service_date: string;
   service_type: string;
   cost_eur: number | null;
+  price_eur: number;
   outcome: string | null;
   next_service_due: string | null;
+};
+
+/** One service with its money: revenue charged, our cost and the resulting profit. */
+export type ServiceLine = {
+  service_id: string;
+  date: string;
+  month: string;
+  service_type: string;
+  item_id: string;
+  category: string;
+  /** Location of the sale for machines at customers, else the machine's location. */
+  location_id: string | null;
+  customer_id: string | null;
+  revenue: number;
+  cost: number;
+  profit: number;
 };
 
 export type SaleLine = {
@@ -154,7 +174,7 @@ export const loadDataset = cache(async () => {
     fetchAll<Customer>("customers", "*"),
     fetchAll<OrderRow>("sales_orders", "*"),
     fetchAll<PoRow>("purchase_orders", "*"),
-    fetchAll<AssetRow>("assets", "asset_id, item_id, status, order_id, acquisition_cost_eur"),
+    fetchAll<AssetRow>("assets", "asset_id, item_id, status, order_id, location_id, acquisition_cost_eur"),
     fetchAll<ServiceRow>("service_history", "*"),
     fetchAll<{ item_id: string; location_id: string; stock_qty: number }>("v_stock", "*"),
     fetchAll<ReturnRow>("sales_returns", "*"),
@@ -232,6 +252,31 @@ export const loadDataset = cache(async () => {
   });
   sales.push(...returnLines);
 
+  const assetById = new Map(assets.map((a) => [a.asset_id, a]));
+  const serviceLines: ServiceLine[] = services.flatMap((s) => {
+    const a = assetById.get(s.asset_id);
+    const item = a && itemById.get(a.item_id);
+    if (!a || !item) return [];
+    const sale = a.order_id ? orderById.get(a.order_id) : undefined;
+    const revenue = Number(s.price_eur ?? 0);
+    const cost = Number(s.cost_eur ?? 0);
+    return [
+      {
+        service_id: s.service_id,
+        date: s.service_date,
+        month: s.service_date.slice(0, 7),
+        service_type: s.service_type,
+        item_id: a.item_id,
+        category: item.category,
+        location_id: sale?.location_id ?? a.location_id ?? null,
+        customer_id: sale?.customer_id ?? null,
+        revenue,
+        cost,
+        profit: revenue - cost,
+      },
+    ];
+  });
+
   const stockByItem = new Map<string, Record<string, number>>();
   for (const s of stock) {
     const rec = stockByItem.get(s.item_id) ?? {};
@@ -253,6 +298,7 @@ export const loadDataset = cache(async () => {
     pos: pos.map((p) => ({ ...p, unit_cost_eur: Number(p.unit_cost_eur) })),
     assets,
     services,
+    serviceLines,
     stockByItem,
     inTransitByItem: new Map(transit.map((t) => [t.item_id, t.quantity])),
     adjustments: adjustments.map((a) => ({ ...a, value_eur: Number(a.value_eur) })),
@@ -394,6 +440,18 @@ export function totals(lines: SaleLine[]): Totals {
   t.discountedOrders = discounted.size;
   t.discountAmount = t.listRevenue - t.revenue;
   return t;
+}
+
+export function filterServices(ds: Dataset, f: Filters, from: string, to: string) {
+  return ds.serviceLines.filter(
+    (l) => l.date >= from && l.date <= to && (!f.category || l.category === f.category) && (!f.location || l.location_id === f.location),
+  );
+}
+
+export function serviceTotals(lines: ServiceLine[]) {
+  const revenue = lines.reduce((s, l) => s + l.revenue, 0);
+  const cost = lines.reduce((s, l) => s + l.cost, 0);
+  return { revenue, cost, profit: revenue - cost, count: lines.length };
 }
 
 export function groupBy<K extends string>(lines: SaleLine[], key: (l: SaleLine) => K) {

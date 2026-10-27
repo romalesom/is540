@@ -204,7 +204,7 @@ export default async function ItemDetailPage({ params, searchParams }: PageProps
             )
           }
         >
-          <Table head={["Date", "Serial", "Service", "Technician", "Next due", "Cost"]}>
+          <Table head={["Date", "Serial", "Service", "Technician", "Next due", "Price", "Cost", "Profit"]}>
             {activity.services.map((s) => {
               const overdue = s.next_service_due && s.next_service_due < today;
               return (
@@ -221,7 +221,9 @@ export default async function ItemDetailPage({ params, searchParams }: PageProps
                   <Td>
                     <span className={overdue ? "font-semibold text-brand" : ""}>{s.next_service_due ?? "–"}</span>
                   </Td>
+                  <Td right>{Number(s.price_eur) > 0 ? eur(Number(s.price_eur)) : "internal"}</Td>
                   <Td right>{s.cost_eur != null ? eur(Number(s.cost_eur)) : "–"}</Td>
+                  <Td right strong>{eur(Number(s.price_eur) - Number(s.cost_eur ?? 0))}</Td>
                 </tr>
               );
             })}

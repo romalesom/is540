@@ -29,13 +29,19 @@ export default async function ServiceHistoryPage({ searchParams }: PageProps<"/s
 
   return (
     <>
-      <PageHeader eyebrow="After-sales" title="Service history" description="Every recorded service, newest first. Filter by serial number, type, outcome or technician." />
+      <PageHeader eyebrow="After-sales" title="Service history" description="Every recorded service, newest first, with what we charged, what it cost us and the profit. Services on machines in stock are internal and not charged." />
       <ServiceTabs active="history" />
 
       <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
         <KpiTile label="Services" value={num(history.total)} hint={filtered ? "Matching the filters" : "All recorded services"} icon="build" />
-        <KpiTile label="Service cost" value={eur(history.totalCost)} hint="Sum of recorded costs" icon="euro" />
-        <KpiTile label="Average cost" value={history.total ? eur(history.totalCost / history.total) : "–"} hint="Per service" icon="calculate" />
+        <KpiTile label="Service revenue" value={eur(history.totalRevenue)} hint={`Our cost ${eur(history.totalCost)}`} icon="euro" />
+        <KpiTile
+          label="Service profit"
+          value={eur(history.totalProfit)}
+          hint={history.totalRevenue ? `${((history.totalProfit / history.totalRevenue) * 100).toFixed(1)} % margin` : "Revenue − cost"}
+          icon="savings"
+          tone={history.totalProfit < 0 ? "alert" : "default"}
+        />
         <KpiTile
           label="Follow-up needed"
           value={num(history.followUps)}
@@ -72,13 +78,18 @@ export default async function ServiceHistoryPage({ searchParams }: PageProps<"/s
                       {s.service_type}
                       {s.technician ? ` · ${s.technician}` : ""}
                     </span>
-                    <span className="shrink-0 font-semibold text-ink">{s.cost_eur != null ? eur(Number(s.cost_eur)) : "–"}</span>
+                    <span className="shrink-0 text-right">
+                      <span className="font-semibold text-ink">{Number(s.price_eur) > 0 ? eur(Number(s.price_eur)) : "internal"}</span>
+                      <span className="block">
+                        cost {s.cost_eur != null ? eur(Number(s.cost_eur)) : "–"} · profit {eur(Number(s.price_eur) - Number(s.cost_eur ?? 0))}
+                      </span>
+                    </span>
                   </div>
                 </li>
               ))}
             </ul>
             <div className="hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[900px] text-sm">
+              <table className="w-full min-w-[1040px] text-sm">
                 <thead className="bg-canvas text-left text-xs uppercase tracking-wider text-muted">
                   <tr>
                     <th className="px-4 py-3 font-semibold">Date</th>
@@ -87,7 +98,9 @@ export default async function ServiceHistoryPage({ searchParams }: PageProps<"/s
                     <th className="px-4 py-3 font-semibold">Technician</th>
                     <th className="px-4 py-3 font-semibold">Outcome</th>
                     <th className="px-4 py-3 font-semibold">Next due</th>
+                    <th className="px-4 py-3 text-right font-semibold">Price</th>
                     <th className="px-4 py-3 text-right font-semibold">Cost</th>
+                    <th className="px-4 py-3 text-right font-semibold">Profit</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
@@ -111,7 +124,20 @@ export default async function ServiceHistoryPage({ searchParams }: PageProps<"/s
                         </span>
                       </td>
                       <td className="px-4 py-3 tabular-nums text-body">{s.next_service_due ?? "–"}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-ink">{s.cost_eur != null ? eur(Number(s.cost_eur)) : "–"}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-ink">{Number(s.price_eur) > 0 ? eur(Number(s.price_eur)) : <span className="text-muted">internal</span>}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-body">{s.cost_eur != null ? eur(Number(s.cost_eur)) : "–"}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">
+                        {(() => {
+                          const profit = Number(s.price_eur) - Number(s.cost_eur ?? 0);
+                          const price = Number(s.price_eur);
+                          return (
+                            <>
+                              <div className={`font-semibold ${profit < 0 ? "text-brand" : "text-ink"}`}>{eur(profit)}</div>
+                              {price > 0 && <div className="text-xs text-muted">{((profit / price) * 100).toFixed(1)} %</div>}
+                            </>
+                          );
+                        })()}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

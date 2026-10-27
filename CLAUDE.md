@@ -47,10 +47,10 @@ Prüfen mit `npx tsc --noEmit`, `npm run lint` und `npm run build`. Nach neuen R
 - **Settings** (`/settings`, ändern nur Stock Manager): MwSt.-Satz und Rabattsätze mit optionaler Mindestmenge (Staffel, nur Maschinen, höchste erreichte Stufe gewinnt). Änderungen wirken nur auf neue Aufträge.
 - **Brutto-Anzeige:** Brutto = netto × (1 + MwSt.) wird nur angezeigt, nie gespeichert, und nur bei Preisen vor einer Transaktion: Verkaufspreis im Inventar und am Artikel, Lieferantenpreise, Artikelformular, Formulare für neue Sales/Purchase Orders. Bestehende Aufträge und das Reporting bleiben netto. Vereinfachung: ein Satz für alle Lieferanten (kein Reverse Charge, keine Einfuhrumsatzsteuer).
 - **Service monitor:** überfällig, kommende Termine, verkauft und nie gewartet; Record service (nächster Termin +180 Tage)
-- **Service history** (`/service/history`, Tab „History“ neben „Monitor“): alle erfassten Services, neueste zuerst; Suche nach Seriennummer, Filter Art/Ergebnis/Techniker, 50 pro Seite; Kennzahlen Anzahl, Kosten, Durchschnitt, Follow-ups über die gefilterte Menge
+- **Service history** (`/service/history`, Tab „History“ neben „Monitor“): alle erfassten Services, neueste zuerst; Suche nach Seriennummer, Filter Art/Ergebnis/Techniker, 50 pro Seite; Spalten Preis, Kosten, Gewinn; Kennzahlen Anzahl, Service-Erlös, Service-Gewinn, Follow-ups über die gefilterte Menge. „Record service“ verlangt Kosten und Preis (Live-Marge, Warnung unter Kosten); an Lagermaschinen intern mit Preis 0
 
 **Reporting** (`/reporting`, eigenes Seitenmenü mit „Back to ERP“): Management summary, Inventory health, Profitability, Purchasing & suppliers (inkl. Preisvergleich über Lieferanten), After-sales & service sowie Drill-through `/reporting/item/[id]`. Jede Seite hat eigene Filter.
-Kennzahlen und Formeln liegen zentral in [src/lib/reporting.ts](src/lib/reporting.ts). Die Daten werden serverseitig seitenweise geladen (PostgREST liefert max. 1000 Zeilen) und in TypeScript aggregiert.
+Service-Erlös, -Kosten und -Gewinn: eigener Block auf „After-sales & service“ (KPI, Trend, Gewinn je Art); Management summary zeigt „Gross profit“ = Warenmarge + Service-Gewinn mit beiden Teilen. Kennzahlen und Formeln liegen zentral in [src/lib/reporting.ts](src/lib/reporting.ts). Die Daten werden serverseitig seitenweise geladen (PostgREST liefert max. 1000 Zeilen) und in TypeScript aggregiert.
 
 **Layout:** responsiv. Unter 768 px Kopfzeile mit Drawer, Tabellen werden zu Karten. Design nach bee360.com (Rot `#b61f29`, Open Sans, Material Symbols). Die Diagrammfarben kommen aus einer farbenblind-geprüften Palette in [src/components/charts.tsx](src/components/charts.tsx).
 
@@ -68,7 +68,8 @@ Kennzahlen und Formeln liegen zentral in [src/lib/reporting.ts](src/lib/reportin
 - **Reporting Inventory health:** Bestandswert inkl. Unterwegs-Ware (ohne Standortfilter); Karte „Write-offs by item“ = negative Korrekturen im Zeitraum zu Kosten, wiedergefundene Ware separat.
 - `app_settings` (genau eine Zeile, `id = 1`): `vat_rate` als Dezimalbruch (0.19). `discount_tiers`: `rate` (PK, Dezimalbruch), `min_qty` optional (leer → wählbar, nie vorausgewählt).
 - `customers` (`CUS-##`) und `suppliers` (`SUP-##`): `status` Active | Inactive (seit 27.10.2026). Angebote sind aktiv zuerst, dann günstigster sortiert, d. h. `item.suppliers[0]` ist der Standardlieferant.
-- Weitere Tabellen: `service_history`, `locations`
+- `service_history`: `cost_eur` = unsere Kosten, `price_eur` (seit 27.10.2026) = dem Kunden berechneter Netto-Preis, 0 bei internen Services (Maschine nicht beim Kunden). Service-Gewinn = price − cost. Migrierte Services wurden auf Maschinen umgehängt, die zum Service-Datum schon verkauft waren (je Ursprungsmaschine, jede Zielmaschine einmal); Dummy-Preise mit 4–20 % Marge auf den Erlös, aus der Service-ID abgeleitet (reproduzierbar). 1 Service (SVC-0020) bleibt intern.
+- Weitere Tabellen: `locations`
 - Views:
   - `v_stock`: Bestand = InStock-Assets + `inventory`
   - `v_order_margin`: Marge = Anschaffungskosten der verknüpften Assets (inkl. über `sales_return_assets` zurückgegebener), sonst Menge × Artikelkosten

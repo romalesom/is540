@@ -175,6 +175,8 @@ export type ServiceEntry = {
   service_type: string;
   technician: string | null;
   cost_eur: number | null;
+  /** Charged to the customer; 0 for internal services. */
+  price_eur: number;
   outcome: string | null;
   next_service_due: string | null;
   serial_number: string;
@@ -567,6 +569,7 @@ export type ServiceRecord = {
   service_type: string;
   technician: string | null;
   cost_eur: number | null;
+  price_eur: number;
   outcome: string | null;
   next_service_due: string | null;
   asset_id: string;
@@ -598,7 +601,7 @@ export async function getServiceHistory({ page, pageSize, ...f }: ServiceHistory
       .order("service_date", { ascending: false })
       .order("service_id", { ascending: false })
       .range(page * pageSize, page * pageSize + pageSize - 1),
-    filtered(client.from("service_history").select("cost_eur, outcome, assets!inner(serial_number)")),
+    filtered(client.from("service_history").select("cost_eur, price_eur, outcome, assets!inner(serial_number)")),
   ]);
   type Row = Omit<ServiceRecord, "serial_number" | "item_id" | "model"> & { assets: { serial_number: string; item_id: string; items: { model: string } | null } };
   const rows = check<Row[]>(pageRes, "service history").map(({ assets, ...r }) => ({
@@ -607,11 +610,15 @@ export async function getServiceHistory({ page, pageSize, ...f }: ServiceHistory
     item_id: assets.item_id,
     model: assets.items?.model ?? assets.item_id,
   }));
-  const all = check<{ cost_eur: number | null; outcome: string | null }[]>(totalsRes, "service totals");
+  const all = check<{ cost_eur: number | null; price_eur: number; outcome: string | null }[]>(totalsRes, "service totals");
+  const totalCost = all.reduce((s, r) => s + Number(r.cost_eur ?? 0), 0);
+  const totalRevenue = all.reduce((s, r) => s + Number(r.price_eur ?? 0), 0);
   return {
     rows,
     total: pageRes.count ?? all.length,
-    totalCost: all.reduce((s, r) => s + Number(r.cost_eur ?? 0), 0),
+    totalCost,
+    totalRevenue,
+    totalProfit: totalRevenue - totalCost,
     followUps: all.filter((r) => r.outcome && r.outcome !== "Completed").length,
   };
 }
