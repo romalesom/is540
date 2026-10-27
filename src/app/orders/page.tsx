@@ -89,7 +89,10 @@ export default async function OrdersPage({ searchParams }: PageProps<"/orders">)
                           {item?.model ?? po.item_id}
                         </Link>
                         <div className="truncate text-xs text-muted">
-                          <span className="font-mono">{po.purchase_order_id}</span> · {po.order_date}
+                          <Link href={`/orders/${po.purchase_order_id}`} className="font-mono underline decoration-line underline-offset-2 hover:text-brand">
+                            {po.purchase_order_id}
+                          </Link>{" "}
+                          · {po.order_date}
                         </div>
                       </div>
                       <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${ORDER_STATUS_STYLE[po.status]}`}>
@@ -155,7 +158,9 @@ export default async function OrdersPage({ searchParams }: PageProps<"/orders">)
                   return (
                     <tr key={po.purchase_order_id} className="hover:bg-canvas">
                       <td className="px-4 py-3">
-                        <div className="font-mono text-xs text-ink">{po.purchase_order_id}</div>
+                        <Link href={`/orders/${po.purchase_order_id}`} className="font-mono text-xs text-ink underline decoration-line underline-offset-2 hover:text-brand">
+                          {po.purchase_order_id}
+                        </Link>
                         <div className="text-xs text-muted">{po.order_date}</div>
                       </td>
                       <td className="px-4 py-3">

@@ -117,7 +117,10 @@ export default async function SalesPage({ searchParams }: PageProps<"/sales">) {
                       <div className="min-w-0">
                         <div className="truncate font-semibold text-ink">{customerName.get(o.customer_id) ?? o.customer_id}</div>
                         <div className="truncate text-xs text-muted">
-                          <span className="font-mono">{o.order_id}</span> · {o.order_date}
+                          <Link href={`/sales/${o.order_id}`} className="font-mono underline decoration-line underline-offset-2 hover:text-brand">
+                            {o.order_id}
+                          </Link>{" "}
+                          · {o.order_date}
                         </div>
                       </div>
                       <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${ORDER_STATUS_STYLE[o.order_status]}`}>
@@ -191,7 +194,9 @@ export default async function SalesPage({ searchParams }: PageProps<"/sales">) {
                   return (
                     <tr key={o.order_id} className="hover:bg-canvas">
                       <td className="px-4 py-3">
-                        <div className="font-mono text-xs text-ink">{o.order_id}</div>
+                        <Link href={`/sales/${o.order_id}`} className="font-mono text-xs text-ink underline decoration-line underline-offset-2 hover:text-brand">
+                          {o.order_id}
+                        </Link>
                         <div className="text-xs text-muted">{o.order_date}</div>
                       </td>
                       <td className="px-4 py-3 font-semibold text-ink">{customerName.get(o.customer_id) ?? o.customer_id}</td>

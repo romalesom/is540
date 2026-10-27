@@ -98,7 +98,9 @@ export default async function HomePage() {
                         {model.get(po.item_id) ?? po.item_id}
                       </Link>
                       <div className="truncate text-xs text-muted">
-                        {num(po.quantity)} × · {supplierName.get(po.supplier_id) ?? po.supplier_id}
+                        <Link href={`/orders/${po.purchase_order_id}`} className="hover:text-brand">
+                          {num(po.quantity)} × · {supplierName.get(po.supplier_id) ?? po.supplier_id}
+                        </Link>
                       </div>
                     </div>
                     <div className="shrink-0 text-right text-xs">
@@ -122,7 +124,9 @@ export default async function HomePage() {
               latestSales.map((o) => (
                 <li key={o.order_id} className="flex items-center gap-3 px-5 py-3">
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold text-ink">{customerName.get(o.customer_id) ?? o.customer_id}</div>
+                    <Link href={`/sales/${o.order_id}`} className="block truncate text-sm font-semibold text-ink hover:text-brand">
+                      {customerName.get(o.customer_id) ?? o.customer_id}
+                    </Link>
                     <div className="truncate text-xs text-muted">
                       {o.order_date} · {num(o.quantity)} × {model.get(o.item_id) ?? o.item_id}
                     </div>

@@ -1,6 +1,6 @@
 # IS540 Inventory Management
 
-Stand: 2026-10-15. Projektnotizen für Claude-Code-Sessions und Mitwirkende.
+Stand: 2026-10-27. Projektnotizen für Claude-Code-Sessions und Mitwirkende.
 
 ## Arbeitsweise
 - **Nicht allein entscheiden.** Bei jeder offenen Design-, Daten- oder Architekturfrage Optionen mit Empfehlung vorlegen und die Entscheidung des Nutzers abwarten.
@@ -43,6 +43,7 @@ Prüfen mit `npx tsc --noEmit`, `npm run lint` und `npm run build`. Nach neuen R
 - **Transfers** (`/transfers`): Umlagerung zwischen Standorten mit Status InTransit → Received (oder Cancelled → zurück zur Quelle). Maschinen verlassen die Quelle per FIFO (Status `InTransit`, ohne Standort). Unterwegs-Ware zählt zum Bestandswert, ist aber nirgends verfügbar; Inventar, Artikelseite und Home zeigen „in transit“. „Transfer“-Button auf der Artikelseite.
 - **Stock counts** (`/counts`): Inventur je Standort. Maschinen per Seriennummer abhaken (nicht gefunden → `Missing`; früher fehlende, jetzt gefundene → wieder `InStock`), Zubehör als Menge (Buchbestand vorausgefüllt). Jede Differenz wird eine Bestandskorrektur. Liste vergangener Zählungen mit Differenzen und Wertänderung.
 - **Scrap** (Artikelseite): Maschinen per Seriennummer bzw. Zubehör-Menge mit Pflicht-Grund verschrotten (→ `Scrapped`, Zustand Defective), bewertet zu Anschaffungs- bzw. Standardkosten.
+- **Belege** (Klick auf die Auftragsnummer in den Listen und auf Home): `/orders/[id]` Purchase order an den Lieferanten; `/sales/[id]` Rechnung (bei Status Open „Order confirmation“) oder `?doc=delivery` Lieferschein mit Seriennummern, ohne Preise. Immer netto mit Hinweis „plus statutory VAT“ (MwSt. wird nicht gespeichert); Retouren als Vermerk. „Print / PDF“ nutzt den Browser-Druck; Seitenleiste und Kopfzeile sind per `print:hidden` ausgeblendet.
 - **Settings** (`/settings`, ändern nur Stock Manager): MwSt.-Satz und Rabattsätze mit optionaler Mindestmenge (Staffel, nur Maschinen, höchste erreichte Stufe gewinnt). Änderungen wirken nur auf neue Aufträge.
 - **Brutto-Anzeige:** Brutto = netto × (1 + MwSt.) wird nur angezeigt, nie gespeichert, und nur bei Preisen vor einer Transaktion: Verkaufspreis im Inventar und am Artikel, Lieferantenpreise, Artikelformular, Formulare für neue Sales/Purchase Orders. Bestehende Aufträge und das Reporting bleiben netto. Vereinfachung: ein Satz für alle Lieferanten (kein Reverse Charge, keine Einfuhrumsatzsteuer).
 - **Service monitor:** überfällig, kommende Termine, verkauft und nie gewartet; Record service (nächster Termin +180 Tage)
@@ -110,7 +111,7 @@ Kennzahlen und Formeln liegen zentral in [src/lib/reporting.ts](src/lib/reportin
    delete from suppliers       where supplier_id = 'SUP-07';
    commit;
    ```
-2. **Storno nach Versand** (Shipped → Cancelled) ist nicht vorgesehen. Bei Bedarf mit dem Nutzer klären.
-3. **Atomarität:** Wareneingang und Verkauf schreiben mehrere Tabellen ohne gemeinsame Transaktion. Für den Prototyp akzeptiert; später als DB-Funktion möglich.
-4. **Alte Spalte `items.supplier_id` entfernen:** wird von der App nicht mehr benutzt (seit `item_suppliers`), ist aber noch vorhanden und nullable. Im SQL-Editor ausführen: `alter table public.items drop column supplier_id;`
-5. **Abgabe-Artefakte** stehen noch aus: Foliensatz (PDF), Video (max. 12 Min.), ZIP.
+2. **Atomarität:** Retoure, Umlagerung, Inventur, Verschrottung und Sammelbestellung sind atomar (DB-Funktionen bzw. ein Insert). Verkauf, Wareneingang und Storno schreiben noch mehrere Tabellen ohne gemeinsame Transaktion; bei Bedarf auf DB-Funktionen umstellen.
+3. **Alte Spalte `items.supplier_id` entfernen:** wird von der App nicht mehr benutzt (seit `item_suppliers`), ist aber noch vorhanden und nullable. Im SQL-Editor ausführen: `alter table public.items drop column supplier_id;`
+4. **Abgabe-Artefakte** stehen noch aus: Foliensatz (PDF), Video (max. 12 Min.), ZIP.
+5. **Zurückgestellt (Nutzer, 26.10.2026):** Teillieferungen bei Purchase Orders (Vorschlag: Aufteilen in `PO-…-2`) und Änderungsprotokoll (Vorschlag: DB-Trigger in `audit_log`).

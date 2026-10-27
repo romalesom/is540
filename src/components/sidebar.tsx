@@ -72,7 +72,7 @@ export function Sidebar({ role }: { role: Role }) {
 
   return (
     <>
-      <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-surface/95 px-4 backdrop-blur md:hidden">
+      <header className="sticky top-0 z-30 flex h-14 print:hidden items-center gap-3 border-b border-line bg-surface/95 px-4 backdrop-blur md:hidden">
         <button
           type="button"
           onClick={() => setOpen(true)}
@@ -102,7 +102,7 @@ export function Sidebar({ role }: { role: Role }) {
 
       <aside
         id="app-nav"
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r border-line bg-surface transition-transform duration-200 md:sticky md:top-0 md:z-auto md:h-screen md:w-64 md:max-w-none md:translate-x-0 ${
+        className={`print:hidden fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r border-line bg-surface transition-transform duration-200 md:sticky md:top-0 md:z-auto md:h-screen md:w-64 md:max-w-none md:translate-x-0 ${
           open ? "translate-x-0 shadow-xl" : "-translate-x-full"
         }`}
       >

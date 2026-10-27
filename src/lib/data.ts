@@ -372,6 +372,32 @@ export async function getStockCounts(): Promise<StockCountSummary[]> {
   }));
 }
 
+export async function getPurchaseOrder(id: string): Promise<PurchaseOrder | null> {
+  const { data } = await db().from("purchase_orders").select("*").eq("purchase_order_id", id).maybeSingle<PurchaseOrder>();
+  return data;
+}
+
+/** A sales order with the serial numbers it shipped and its returns, for documents. */
+export async function getSalesOrderDocument(id: string) {
+  const client = db();
+  const { data: order } = await client.from("sales_orders").select("*").eq("order_id", id).maybeSingle<SalesOrder>();
+  if (!order) return null;
+  const [returns, sold, returnedLinks] = await Promise.all([
+    client.from("sales_returns").select("*").eq("order_id", id).order("return_id"),
+    client.from("assets").select("serial_number").eq("order_id", id).order("serial_number"),
+    client.from("sales_returns").select("sales_return_assets(assets(serial_number))").eq("order_id", id),
+  ]);
+  const returnedSerials = (check<{ sales_return_assets: { assets: { serial_number: string } | null }[] }[]>(returnedLinks, "returned machines"))
+    .flatMap((r) => r.sales_return_assets.map((ra) => ra.assets?.serial_number))
+    .filter((s): s is string => Boolean(s));
+  return {
+    order,
+    returns: check<SalesReturn[]>(returns, "returns"),
+    // Everything that left with this order, including machines returned later.
+    serials: [...check<{ serial_number: string }[]>(sold, "machines").map((a) => a.serial_number), ...returnedSerials].sort(),
+  };
+}
+
 export async function countPurchaseOrders(): Promise<Record<string, number>> {
   const client = db();
   const statuses = ["Ordered", "Received", "Cancelled"] as const;
