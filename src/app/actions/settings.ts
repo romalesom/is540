@@ -70,3 +70,18 @@ export async function saveDiscountTiers(_prev: FormState, form: FormData): Promi
   revalidatePath("/", "layout");
   return { ok: true, message: "Discount rates saved." };
 }
+
+export async function updatePaymentTerms(_prev: FormState, form: FormData): Promise<FormState> {
+  await requireManager();
+  const f = new Fields(form);
+  const customer = f.number("customer_payment_days", "Customer payment terms", { min: 0, max: 180, integer: true });
+  const supplier = f.number("supplier_payment_days", "Supplier payment terms", { min: 0, max: 180, integer: true });
+  if (!f.valid) return f.fail();
+  const { error } = await db()
+    .from("app_settings")
+    .update({ customer_payment_days: customer, supplier_payment_days: supplier, updated_at: new Date().toISOString() })
+    .eq("id", 1);
+  if (error) return { ok: false, message: `Saving failed: ${error.message}`, values: f.values };
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Payment terms saved." };
+}

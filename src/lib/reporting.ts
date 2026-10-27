@@ -148,6 +148,8 @@ export type ServiceLine = {
 export type SaleLine = {
   /** Returns are negative lines dated on the return. */
   kind: "sale" | "return";
+  /** Order status for sales (Open, Shipped, Delivered, Returned); "Return" for return lines. */
+  status: string;
   order_id: string;
   date: string;
   month: string;
@@ -205,6 +207,7 @@ export const loadDataset = cache(async () => {
       const cogs = assetCostByOrder.get(o.order_id) ?? o.quantity * item.unit_cost_eur;
       return {
         kind: "sale" as const,
+        status: o.order_status,
         order_id: o.order_id,
         date: o.order_date,
         month: o.order_date.slice(0, 7),
@@ -233,6 +236,7 @@ export const loadDataset = cache(async () => {
     return [
       {
         kind: "return" as const,
+        status: "Return",
         order_id: r.return_id,
         date: r.return_date,
         month: r.return_date.slice(0, 7),

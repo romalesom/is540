@@ -29,6 +29,7 @@ const REPORT_NAV = [
   { href: "/reporting/profitability", label: "Profitability", icon: "paid" },
   { href: "/reporting/purchasing", label: "Purchasing & suppliers", icon: "local_shipping" },
   { href: "/reporting/service", label: "After-sales & service", icon: "build" },
+  { href: "/reporting/financials", label: "Financial statements", icon: "account_balance" },
 ];
 
 // The logo links to the ERP home page, also from inside reporting.

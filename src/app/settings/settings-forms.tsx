@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { saveDiscountTiers, updateVat } from "@/app/actions/settings";
+import { saveDiscountTiers, updatePaymentTerms, updateVat } from "@/app/actions/settings";
 import { Field, FormError, SubmitButton, controlClass } from "@/components/forms";
 import { Icon } from "@/components/icon";
 import { eur } from "@/components/ui";
@@ -190,5 +190,58 @@ function TierRows({
         </div>
       )}
     </form>
+  );
+}
+
+export function PaymentTermsSettings({ customerDays, supplierDays, isManager }: { customerDays: number; supplierDays: number; isManager: boolean }) {
+  const [state, formAction] = useActionState(updatePaymentTerms, {});
+  const e = state.errors ?? {};
+  const v = (name: string, fallback: number) => state.values?.[name] ?? String(fallback);
+
+  return (
+    <section className="rounded-card border border-line bg-surface p-6 md:p-8">
+      <h2 className="font-bold text-ink">Payment terms</h2>
+      <p className="mb-5 text-sm text-muted">
+        Used by the financial statements: the data has no payments, so receivables are estimated as customer invoices of the last N days and
+        payables as supplier invoices of the last N days before the balance sheet date.
+      </p>
+      <form key={JSON.stringify(state.values ?? { customerDays, supplierDays })} action={formAction} noValidate>
+        <FormError message={state.ok ? undefined : state.message} />
+        <div className="grid items-start gap-5 sm:grid-cols-2">
+          <Field label="Customers pay within (days)" name="customer_payment_days" error={e.customer_payment_days}>
+            <input
+              id="customer_payment_days"
+              name="customer_payment_days"
+              type="number"
+              min={0}
+              max={180}
+              step="1"
+              defaultValue={v("customer_payment_days", customerDays)}
+              disabled={!isManager}
+              className={controlClass(e.customer_payment_days)}
+            />
+          </Field>
+          <Field label="We pay suppliers within (days)" name="supplier_payment_days" error={e.supplier_payment_days}>
+            <input
+              id="supplier_payment_days"
+              name="supplier_payment_days"
+              type="number"
+              min={0}
+              max={180}
+              step="1"
+              defaultValue={v("supplier_payment_days", supplierDays)}
+              disabled={!isManager}
+              className={controlClass(e.supplier_payment_days)}
+            />
+          </Field>
+        </div>
+        {isManager && (
+          <div className="mt-6 flex flex-wrap items-center gap-4">
+            <SubmitButton>Save payment terms</SubmitButton>
+            <Saved message={state.ok ? state.message : undefined} />
+          </div>
+        )}
+      </form>
+    </section>
   );
 }

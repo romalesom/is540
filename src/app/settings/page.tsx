@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/ui";
 import { getRole } from "@/lib/role";
 import { getSettings } from "@/lib/settings";
-import { DiscountSettings, VatSettings } from "./settings-forms";
+import { DiscountSettings, PaymentTermsSettings, VatSettings } from "./settings-forms";
 
 export default async function SettingsPage() {
   const [settings, role] = await Promise.all([getSettings(), getRole()]);
@@ -21,6 +21,7 @@ export default async function SettingsPage() {
       <div className="grid gap-6">
         <VatSettings vatRate={settings.vatRate} updatedAt={settings.updatedAt} isManager={isManager} />
         <DiscountSettings tiers={settings.tiers} isManager={isManager} />
+        <PaymentTermsSettings customerDays={settings.customerPaymentDays} supplierDays={settings.supplierPaymentDays} isManager={isManager} />
       </div>
     </div>
   );
