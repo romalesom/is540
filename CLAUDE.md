@@ -47,6 +47,7 @@ Prüfen mit `npx tsc --noEmit`, `npm run lint` und `npm run build`. Nach neuen R
 - **Settings** (`/settings`, ändern nur Stock Manager): MwSt.-Satz und Rabattsätze mit optionaler Mindestmenge (Staffel, nur Maschinen, höchste erreichte Stufe gewinnt). Änderungen wirken nur auf neue Aufträge.
 - **Brutto-Anzeige:** Brutto = netto × (1 + MwSt.) wird nur angezeigt, nie gespeichert, und nur bei Preisen vor einer Transaktion: Verkaufspreis im Inventar und am Artikel, Lieferantenpreise, Artikelformular, Formulare für neue Sales/Purchase Orders. Bestehende Aufträge und das Reporting bleiben netto. Vereinfachung: ein Satz für alle Lieferanten (kein Reverse Charge, keine Einfuhrumsatzsteuer).
 - **Service monitor:** überfällig, kommende Termine, verkauft und nie gewartet; Record service (nächster Termin +180 Tage)
+- **Service history** (`/service/history`, Tab „History“ neben „Monitor“): alle erfassten Services, neueste zuerst; Suche nach Seriennummer, Filter Art/Ergebnis/Techniker, 50 pro Seite; Kennzahlen Anzahl, Kosten, Durchschnitt, Follow-ups über die gefilterte Menge
 
 **Reporting** (`/reporting`, eigenes Seitenmenü mit „Back to ERP“): Management summary, Inventory health, Profitability, Purchasing & suppliers (inkl. Preisvergleich über Lieferanten), After-sales & service sowie Drill-through `/reporting/item/[id]`. Jede Seite hat eigene Filter.
 Kennzahlen und Formeln liegen zentral in [src/lib/reporting.ts](src/lib/reporting.ts). Die Daten werden serverseitig seitenweise geladen (PostgREST liefert max. 1000 Zeilen) und in TypeScript aggregiert.

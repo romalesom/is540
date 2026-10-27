@@ -13,6 +13,7 @@ import {
 import { getRole } from "@/lib/role";
 import { RecordServiceButton } from "./record-service";
 import { SerialSearch } from "./serial-search";
+import { ServiceTabs } from "./service-tabs";
 
 const PAGE_SIZE = 50;
 const DAY = 86_400_000;
@@ -63,6 +64,7 @@ export default async function ServicePage({ searchParams }: PageProps<"/service"
         title="Service monitor"
         description="Which machines need maintenance now, which are coming up, and which sold machines have never been serviced."
       />
+      <ServiceTabs active="monitor" />
 
       <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
         <KpiTile label="Overdue services" value={num(overdue.length)} hint="Next service date has passed" icon="event_busy" tone={overdue.length ? "alert" : "default"} />

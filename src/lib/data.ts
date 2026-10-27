@@ -561,6 +561,71 @@ export type NeverServiced = {
 };
 
 // Sold machines without any service record, longest-unserviced first.
+export type ServiceRecord = {
+  service_id: string;
+  service_date: string;
+  service_type: string;
+  technician: string | null;
+  cost_eur: number | null;
+  outcome: string | null;
+  next_service_due: string | null;
+  asset_id: string;
+  serial_number: string;
+  item_id: string;
+  model: string;
+};
+
+export type ServiceHistoryFilters = { q?: string; type?: string; outcome?: string; technician?: string };
+
+/**
+ * All recorded services, newest first, filtered and paged on the server.
+ * Totals (count, cost, follow-ups) cover the whole filtered set, not just the page.
+ */
+export async function getServiceHistory({ page, pageSize, ...f }: ServiceHistoryFilters & { page: number; pageSize: number }) {
+  const client = db();
+  // Same filters for the page and the totals query.
+  type Filterable = { eq(column: string, value: string): Filterable; ilike(column: string, pattern: string): Filterable };
+  function filtered<Q>(query: Q): Q {
+    let q = query as unknown as Filterable;
+    if (f.type) q = q.eq("service_type", f.type);
+    if (f.outcome) q = q.eq("outcome", f.outcome);
+    if (f.technician) q = q.eq("technician", f.technician);
+    if (f.q) q = q.ilike("assets.serial_number", `%${f.q.replace(/[%_\\]/g, "\\$&")}%`);
+    return q as unknown as Q;
+  }
+  const [pageRes, totalsRes] = await Promise.all([
+    filtered(client.from("service_history").select("*, assets!inner(serial_number, item_id, items(model))", { count: "exact" }))
+      .order("service_date", { ascending: false })
+      .order("service_id", { ascending: false })
+      .range(page * pageSize, page * pageSize + pageSize - 1),
+    filtered(client.from("service_history").select("cost_eur, outcome, assets!inner(serial_number)")),
+  ]);
+  type Row = Omit<ServiceRecord, "serial_number" | "item_id" | "model"> & { assets: { serial_number: string; item_id: string; items: { model: string } | null } };
+  const rows = check<Row[]>(pageRes, "service history").map(({ assets, ...r }) => ({
+    ...r,
+    serial_number: assets.serial_number,
+    item_id: assets.item_id,
+    model: assets.items?.model ?? assets.item_id,
+  }));
+  const all = check<{ cost_eur: number | null; outcome: string | null }[]>(totalsRes, "service totals");
+  return {
+    rows,
+    total: pageRes.count ?? all.length,
+    totalCost: all.reduce((s, r) => s + Number(r.cost_eur ?? 0), 0),
+    followUps: all.filter((r) => r.outcome && r.outcome !== "Completed").length,
+  };
+}
+
+/** Values offered in the service history filters. */
+export async function getServiceFilterOptions() {
+  const rows = check<{ technician: string | null; outcome: string | null }[]>(
+    await db().from("service_history").select("technician, outcome"),
+    "service filter options",
+  );
+  const distinct = (values: (string | null)[]) => [...new Set(values.filter((v): v is string => Boolean(v)))].sort();
+  return { technicians: distinct(rows.map((r) => r.technician)), outcomes: distinct(rows.map((r) => r.outcome)) };
+}
+
 export async function getNeverServiced({
   page,
   pageSize,
